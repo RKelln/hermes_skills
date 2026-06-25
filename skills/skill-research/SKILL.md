@@ -123,8 +123,9 @@ Check the `hermes-skills` topic for repos that don't appear in registry searches
 # https://github.com/topics/hermes-skills
 ```
 
-The topic has ~13 repos. Some are tools (not installer skills) but many contain
-skills directories. Read the README of any repo whose description overlaps.
+Repos tagged with this topic may contain skills directories not indexed by
+`hermes skills search`. Some are tools (not installer skills) but many contain
+installable skills. Read the README of any repo whose description overlaps.
 
 ### Phase 3: Inspect Candidates
 

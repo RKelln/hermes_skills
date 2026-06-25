@@ -187,15 +187,34 @@ Common issues to catch before the reviewer does:
 
 ### Phase 5: Publish
 
-Publish to GitHub as a tap:
+Publish to GitHub as a tap. Two paths, depending on token permissions:
+
+**Path A: `hermes skills publish` (preferred, needs fork scope)**
 
 ```bash
-# From a git repo with skills/ directory at root:
 hermes skills publish <skill-dir> --to github --repo <owner>/<repo>
 ```
 
-**Post-publish:**
-- Add `hermes-skills` topic to the GitHub repo (Settings → Topics)
+This requires a GitHub token with `repo` and `fork` scopes. Fine-grained
+tokens often lack fork permission — if you get "token lacks permission to
+fork repos", use Path B.
+
+**Path B: Direct git push (fallback)**
+
+```bash
+# Clone the empty repo, copy skills in, push
+cd /tmp && gh repo clone <owner>/<repo>
+cp -r ~/.hermes/skills/<category>/<skill-name> <repo>/skills/
+cd <repo> && git add -A && git commit -m "Add <skill-name>"
+git remote set-url origin git@github.com:<owner>/<repo>.git  # use SSH
+git push origin main
+```
+
+SSH push bypasses token scope issues. Verify SSH works first:
+`ssh -T git@github.com`
+
+**Post-publish (both paths):**
+- Add `hermes-skills` topic to the GitHub repo (Settings → Topics in web UI)
 - Also tag: `hermes-agent`, `agentskills`
 - Verify the skill appears in `hermes skills search` within 24 hours
 
@@ -255,6 +274,11 @@ SKILL.md with no scripts and no references.
 - **Over-polishing**: Skills improve with use. Ship v1.0.0 with the core
   procedure, then patch as pitfalls emerge. Don't add features you haven't
   tested in practice.
+- **Publish token permissions**: `hermes skills publish` needs a GitHub token
+  with `repo` AND `fork` scopes. Fine-grained tokens and some OAuth tokens
+  lack fork permission. Fallback: clone the empty repo, copy skills in
+  manually, and push via SSH (`git@github.com:<owner>/<repo>.git`).
+  SSH push bypasses all token scope issues.
 
 ## Verification
 
