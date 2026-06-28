@@ -187,7 +187,19 @@ Common issues to catch before the reviewer does:
 
 ### Phase 5: Publish
 
-Publish to GitHub as a tap. Two paths, depending on token permissions:
+**Before publishing, run a safety scan** on the staged changes. A quick grep
+catches PII, hardcoded paths, and vendor-lock language that reviews can miss:
+
+```bash
+git diff --cached | grep -qiE "(api_key|secret|token|password).*=.*['\"][a-zA-Z0-9_-]{20,}" && echo "WARNING: possible secret"
+git diff --cached | grep -qE "^\+.*/home/[^/]+/(?!\.hermes)" && echo "WARNING: hardcoded user path"
+git diff --cached | grep -qiE "model.*(required|must|should use)" && echo "WARNING: vendor-lock"
+```
+
+If any warnings fire, fix before pushing. This is cheap insurance — catching
+a leaked credential or environment-specific path before it hits a public repo.
+
+Then publish to GitHub:
 
 **Path A: `hermes skills publish` (preferred, needs fork scope)**
 

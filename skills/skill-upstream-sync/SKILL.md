@@ -180,6 +180,18 @@ Then create the cron job using the `cronjob` tool or `hermes cron create`:
 - **Schedule**: daily at 9am: `0 9 * * *`
 - **Delivery**: `all` for Matrix + other platforms, or `local` for manual review
 
+After the agent finishes merging, the cron prompt should also sync any
+published skills to their GitHub repo. The pattern uses a separate script
+that copies local skill dirs to a git clone, scans for PII/hardcoded paths,
+and pushes only if safe:
+
+```bash
+bash ~/.hermes/scripts/sync_published_skills.sh
+```
+
+The script lives outside the skill directory (cron requires `~/.hermes/scripts/`).
+It's repo-specific — update the skill list and `REPO_DIR` for your own setup.
+
 ## Verification
 1. Run `hermes skills list-modified` — should show only skills you intentionally
    haven't merged yet
