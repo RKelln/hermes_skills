@@ -1,7 +1,7 @@
 ---
 name: skill-builder
 description: Build and publish production-ready Hermes skills — research, author, review, ship.
-version: 1.0.0
+version: 1.1.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -84,6 +84,7 @@ metadata:
 | Phase | Tool / Command |
 |-------|---------------|
 | Research | `hermes skills search`, `hermes skills inspect`, GitHub topics |
+| Mine | Clone adjacent repos, read sub-files, extract reusable features |
 | Author | `write_file` to `~/.hermes/skills/<cat>/<name>/SKILL.md` |
 | Test | Load with `/skill <name>`, exercise the procedure |
 | Review | `delegate_task` with fresh subagent context |
@@ -101,8 +102,40 @@ Load the `skill-research` skill (must be installed) and search all registries:
 4. Classify findings: DUPLICATE, ADJACENT, PARTIAL, or NONE
 
 If a DUPLICATE exists: tell the user and offer to install it instead.
-If ADJACENT: note how yours differs — this goes in your skill's description.
+If ADJACENT or PARTIAL: proceed to Phase 1b — mine them for reusable features.
 If NONE: green light. Proceed to Phase 2.
+
+### Phase 1b: Mine Adjacent Skills (extract reusable features)
+
+Adjacent and partial skills aren't just competitors — they're free research.
+Before writing your own skill, pull them down and mine them for value:
+
+1. Clone the repo for the most comprehensive adjacent skill(s):
+   ```bash
+   cd /tmp && git clone --depth 1 <repo-url> <name>
+   ```
+
+2. Read the SKILL.md and all sub-files (look for `references/`, `*.md` siblings,
+   `scripts/`, `examples/`). Adjacent skills often have multiple sub-files.
+
+3. Identify what to integrate into your skill:
+   - **Features you missed** — sub-commands, flags, workflows not in your plan
+   - **Pitfalls they found** — error tables, gotchas, known failure modes
+   - **Agent-specific patterns** — how they solve the "agent can't see PDFs"
+     problem, verification methods, CLI introspection tricks
+   - **Conversion/migration tables** — if the tool interoperates with others
+
+4. **Do NOT** copy their skill wholesale or import their scripts. Extract the
+   knowledge and re-express it in your skill's voice and structure.
+
+5. Report to the user: what you found, what you're integrating, what you're
+   intentionally leaving out and why. Be specific about omissions — e.g.,
+   "left out package publishing (niche), search scripts (require embedded
+   data files), and academic specifics (covered by separate skill)." This
+   shows you made conscious tradeoffs, not that you missed things.
+
+This step turns 5 existing skills from "competition" into "research budget."
+It is not optional — if ADJACENT or PARTIAL skills exist, mine them first.
 
 ### Phase 2: Author the SKILL.md
 
@@ -143,6 +176,11 @@ required_environment_variables:
 4. "## Procedure" — numbered phases with exact commands
 5. "## Pitfalls" — known failure modes and fixes
 6. "## Verification" — how to confirm it worked
+
+For tool-oriented skills (CLI tools, APIs, compilers), add a
+"### Common Error Messages" subsection under Pitfalls — a 3-column
+table (Error / Cause / Fix) that maps exact error strings to their
+causes and fixes. This turns the skill into a self-service debugger.
 
 **Scripts:** Place in `scripts/` subdirectory. Document with exact invocation
 commands. If needed for cron, add a "## Cron Job Setup" section.
@@ -225,7 +263,36 @@ git push origin main
 SSH push bypasses token scope issues. Verify SSH works first:
 `ssh -T git@github.com`
 
-**Post-publish (both paths):**
+**Path C: Add to existing taps repo (most common)**
+
+When you already have a taps repo and are adding a new skill (or updating
+existing ones), clone, copy, update the README, and push:
+
+```bash
+cd /tmp && gh repo clone <owner>/<repo>
+cp -r ~/.hermes/skills/<category>/<skill-name> <repo>/skills/
+```
+
+Also copy any meta-skills you updated during the build (skill-builder,
+skill-research, etc.) — they live in the same taps repo:
+
+```bash
+cp -r ~/.hermes/skills/hermes/skill-builder <repo>/skills/
+```
+
+Then update the README to list the new skill with a one-paragraph description
+matching the format of existing entries. Add install instructions if this is
+a prerequisite for other skills. Finally:
+
+```bash
+cd <repo> && git add -A && git commit -m "Add <skill-name>; update meta-skills"
+git push origin main
+```
+
+This is the typical pattern: you're maintaining a growing collection, not
+creating a fresh repo per skill.
+
+**Post-publish (all paths):**
 - Add `hermes-skills` topic to the GitHub repo (Settings → Topics in web UI)
 - Also tag: `hermes-agent`, `agentskills`
 - Verify the skill appears in `hermes skills search` within 24 hours
@@ -291,6 +358,11 @@ SKILL.md with no scripts and no references.
   lack fork permission. Fallback: clone the empty repo, copy skills in
   manually, and push via SSH (`git@github.com:<owner>/<repo>.git`).
   SSH push bypasses all token scope issues.
+- **Reviewers need the CLI, not just the file**: When the skill covers a CLI
+  tool, include the tool's binary path and version in the reviewer's context
+  (e.g., "Typst 0.15.0 is installed at /path/to/typst"). A reviewer who can
+  only read the SKILL.md can catch PII and tone issues but not broken commands.
+  Give them `toolsets=["terminal","file"]` so they can actually run commands.
 
 ## Verification
 
