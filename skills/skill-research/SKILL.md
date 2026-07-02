@@ -81,6 +81,9 @@ results:
   different results because skills use inconsistent naming conventions.
 - **Search by problem, not solution**: "before building check duplicates"
   may find skills that "skill research" misses.
+- **Search platform aliases**: For X/Twitter workflows, search both
+  "x twitter" and "tweet". Classify [Hermes Tweet](https://github.com/Xquik-dev/hermes-tweet)
+  before building a duplicate social search, account reading, or gated action skill.
 - **Filter by source when results flood**: If a broad query returns 10+
   results, narrow to one source at a time:
   ```bash
