@@ -357,6 +357,9 @@ SKILL.md with no scripts and no references.
   with `repo` AND `fork` scopes. Fine-grained tokens and some OAuth tokens
   lack fork permission. Fallback: clone the empty repo, copy skills in
   manually, and push via SSH (`git@github.com:<owner>/<repo>.git`).
+  If your remote is HTTPS and push is denied (403), switch to SSH
+  (`git remote set-url origin <ssh-url>`), then push. Verify SSH
+  to GitHub works first.
   SSH push bypasses all token scope issues.
 - **Reviewers need the CLI, not just the file**: When the skill covers a CLI
   tool, include the tool's binary path and version in the reviewer's context
