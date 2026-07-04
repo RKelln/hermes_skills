@@ -1,7 +1,7 @@
 ---
 name: skill-upstream-sync
 description: Detect and integrate upstream changes to bundled skills that have local modifications. Runs diff review and merges best of both.
-version: 1.1.0
+version: 1.2.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -160,6 +160,14 @@ When running interactively, process one skill at a time so the user can review.
   from `list-modified`. If it was truly diverged and you just re-baselined,
   it may briefly reappear until the next `sync_skills()` pass updates the hash.
   Re-run the detection script to confirm.
+- **SSH URLs trigger the email regex in `sync_published_skills.sh`**: The safety
+  scan's email detection pattern (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+  matches `<user>@<host>` SSH references (e.g., `<git-user>@github.com`) as
+  false-positive email addresses. When adding lines to skills synced to a public
+  repo, never use literal SSH URLs — use `<ssh-url>` placeholders or descriptive
+  text (e.g., "Verify SSH to GitHub works first" instead of `ssh -T <ssh-url>`).
+  Existing lines already in the repo won't trigger this (the regex only checks
+  `+`-prefixed diff additions), so only newly-added SSH URLs need this treatment.
 
 ## Cron Job Setup
 
