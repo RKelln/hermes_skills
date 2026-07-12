@@ -1,7 +1,7 @@
 ---
 name: skill-builder
 description: Build and publish production-ready Hermes skills — research, author, review, ship.
-version: 1.1.0
+version: 1.2.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -46,6 +46,7 @@ Before building, know the rules. These are hard-won from shipping skills.
 
 - YAML frontmatter: `name`, `description` (brief, one-line), `version`,
   `platforms`, `metadata.hermes.tags`, `metadata.hermes.category`
+- **Description is the skill's trigger mechanism.** The description appears in the `<available_skills>` block the agent scans every turn. If it doesn't contain the user's likely trigger words, the skill will never load. Include the exact phrases users will say: `"Handle 'research [URL]' and 'read [URL]' requests"` not `"Orchestrate research sessions."` Include a direct instruction: `"Load this skill whenever the user sends a URL with research intent."` Test: would a busy agent scanning 100+ skill descriptions recognize that this skill matches the user's message?
 - Optional frontmatter: `author`, `license`, `metadata.hermes.related_skills`,
   `metadata.hermes.requires_toolsets`, `metadata.hermes.fallback_for_toolsets`,
   `required_environment_variables`
@@ -54,6 +55,7 @@ Before building, know the rules. These are hard-won from shipping skills.
 
 ### Safety and Tone
 
+- **Never include pipe-to-interpreter patterns.** No `curl | python3`, `curl | bash`, `curl | tar`, or any pipe from network to interpreter/archiver. Skills that include these teach unsafe habits. Always show download-to-file first, then process the local file. If a skill fetches content from the network, include a ⚠️ safety banner.
 - No PII (usernames, machine names, home paths other than `~/.hermes`)
 - No vendor-lock (model names in examples, not requirements)
 - No marketing language ("revolutionary", "game-changing", "powerful")
@@ -218,6 +220,7 @@ fix it. If you disagree, explain why.
 Common issues to catch before the reviewer does:
 - `SKILL_DIR` used but not defined
 - Hardcoded paths anywhere
+- Pipe-to-interpreter patterns (`curl | python3`, `curl | tar`) — always download to file first
 - Model name recommendations
 - Dead references to non-existent files
 - Missing `mkdir -p` in setup commands
@@ -321,6 +324,8 @@ SKILL.md with no scripts and no references.
 
 ## Pitfalls
 
+- **Description won't trigger**: The most common adoption failure. The description appears in the `<available_skills>` block the agent scans. If it doesn't contain the user's trigger words, the skill is invisible. `"Orchestrate research sessions"` won't load when the user says `research https://...` — use `"Handle 'research [URL]' requests. Load this skill when the user sends a URL with research intent."` Include the exact phrases users will type and an explicit load instruction. The description is your skill's only advertisement — make it count.
+- **Pipe-to-interpreter in commands**: The most dangerous pattern a skill can include. Never write `curl URL | python3`, `curl URL | bash`, or `curl URL | tar xz`. Always download to a file first (`curl -sL URL -o /tmp/file`), then process the local file. The reviewer will flag these immediately — catch them in self-review.
 - **SKILL_DIR undefined**: The most common publication blocker. Define it at the
   top of your Procedure section.
 - **md5sum vs _dir_hash**: If your skill hashes files, match Hermes' `_dir_hash`
