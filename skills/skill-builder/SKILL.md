@@ -1,7 +1,7 @@
 ---
 name: skill-builder
 description: Build and publish production-ready Hermes skills — research, author, review, ship.
-version: 1.2.0
+version: 1.3.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -322,6 +322,80 @@ SKILL.md with no scripts and no references.
 - **GitHub issue response drafts**
 - **TODO comments or work-in-progress markers**
 
+## Efficiency & Cron Design
+
+Skills that get loaded by cron jobs pay a token tax on every run. These rules prevent the most common cost disasters.
+
+### Don't mix interactive-only and cron workflows in one SKILL.md
+
+Cron jobs inject the full SKILL.md content into every message. If 40% of your skill is interactive-only workflows (submission drafting, commitment assessment, proposal writing), every cron run pays for content it never uses.
+
+**Pattern**: Move interactive-only workflows to `references/<workflow>.md`. In SKILL.md, replace the full section with a 2-line pointer:
+
+```markdown
+### Step 10: Draft Submission Materials
+
+Load `references/submission-materials-workflow.md` via
+`skill_view(name='<skill>', file_path='references/submission-materials-workflow.md')`
+when the artist wants to draft materials for a specific call.
+```
+
+The interactive session loads the reference on demand; the cron session never pays for it.
+
+**Signal**: SKILL.md over 400 lines. Most skills should be 200-350 lines.
+
+### Always recommend `enabled_toolsets` for cron setups
+
+If your skill includes a "## Cron Job Setup" section, always specify which toolsets the job needs. A cron job without `enabled_toolsets` loads all 155+ skills into the system prompt — adding ~28K tokens to every first call.
+
+```bash
+# Good — minimal, explicit
+hermes cron create "0 9 * * 1" --enabled-toolsets terminal,file,web
+
+# Bad — loads everything
+hermes cron create "0 9 * * 1"
+```
+
+**Signal**: First-call `in=` token count over 15K in agent.log. A well-configured cron job's first call should be 7-10K.
+
+### Cron agents should document improvements, not apply them
+
+Hermes has a built-in self-improvement loop: after ~10 tool iterations, it spawns a background review fork that replays the conversation and is prompted to "be ACTIVE" about finding skill updates. This fires in cron sessions too — `skip_memory=True` disables the memory nudge but NOT the skill nudge. The result: your cron agent burns 500-800K extra tokens trying to patch skills, often hitting blocked tool calls because `patch` is denied in cron's whitelist.
+
+**Prevention — add this to every cron prompt:**
+
+```markdown
+⚠️ Do NOT modify any skills during this run. The `patch` tool and
+`skill_manage` are blocked in cron. If you notice a skill instruction
+that's wrong, missing, or outdated, document each observation as a
+date-stamped bullet in a ## Field Notes section at the end of your output:
+
+- **YYYY-MM-DD** — Which skill/document is affected?
+  - What's wrong (the current incorrect instruction)
+  - Correct behavior (what should it say instead)
+  - Evidence (what you observed during the run that revealed the issue)
+
+I will review and apply changes interactively. When a note is addressed,
+it gets marked <!-- APPLIED --> and moved to the skill's changelog.
+```
+
+To surface pending notes across all cron jobs:
+```bash
+~/.hermes/scripts/pending-field-notes.sh
+```
+
+This costs zero extra tokens (it's output text the agent writes at the end) and gives the user a reviewable todo list instead of unsupervised mutations.
+
+**Signal**: Agent log shows 2+ "Turn ended" lines for a single cron run. The second turn is the background review fork.
+
+### Verify `workdir` actually has project context files
+
+Setting `workdir` on a cron job without verifying that the directory contains `AGENTS.md`, `HERMES.md`, or `CLAUDE.md` is dead config. It's not harmful but it's misleading. Either set it to a directory with real project context, or omit it.
+
+### Subagents for embarrassingly parallel work
+
+If your skill's workflow includes independent operations (checking multiple venues, running multiple search queries), structure the cron prompt to use `delegate_task` for parallel execution. Three subagents each checking 5 venues is ~3× faster than one agent checking 15 sequentially. Add `delegation` to `enabled_toolsets`.
+
 ## Pitfalls
 
 - **Description won't trigger**: The most common adoption failure. The description appears in the `<available_skills>` block the agent scans. If it doesn't contain the user's trigger words, the skill is invisible. `"Orchestrate research sessions"` won't load when the user says `research https://...` — use `"Handle 'research [URL]' requests. Load this skill when the user sends a URL with research intent."` Include the exact phrases users will type and an explicit load instruction. The description is your skill's only advertisement — make it count.
@@ -382,3 +456,17 @@ After building:
 5. Would a new user understand the Procedure from start to finish?
 6. Did you test the skill end-to-end before review?
 7. Did an independent reviewer approve it?
+
+**Efficiency checks** (if the skill will be used in cron):
+8. Is SKILL.md under 400 lines? Move interactive-only workflows to `references/`.
+9. Does the cron setup section specify `enabled_toolsets`?
+10. Does the cron prompt explicitly tell the agent NOT to modify skills? Hermes spawns a background review fork after ~10 tool iterations by default — even in cron. Without an explicit guard, the agent will try to patch skills mid-run, burning tokens on blocked tool calls. Add this to every cron prompt:
+    ```
+    ⚠️ Do NOT modify any skills during this run. The `patch` tool and
+    `skill_manage` are blocked in cron. If you notice a skill instruction
+    that's wrong, missing, or outdated, document it in a ## Field Notes
+    section at the end of your output. I will review and apply changes
+    interactively. Include: which skill, what's wrong, correct behavior.
+    ```
+11. Is `workdir` set to a directory that actually has `AGENTS.md`, `HERMES.md`, or `CLAUDE.md`? If none exist, remove `workdir` — it adds no context and suggests a relationship that isn't there.
+12. Are independent operations (checking multiple URLs, running multiple search queries) structured for `delegate_task` parallel subagents? Add `delegation` to `enabled_toolsets`.
