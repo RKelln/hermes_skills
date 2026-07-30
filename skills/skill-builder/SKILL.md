@@ -362,22 +362,23 @@ hermes cron create "0 9 * * 1"
 
 Hermes has a built-in self-improvement loop: after ~10 tool iterations, it spawns a background review fork that replays the conversation and is prompted to "be ACTIVE" about finding skill updates. This fires in cron sessions too — `skip_memory=True` disables the memory nudge but NOT the skill nudge. The result: your cron agent burns 500-800K extra tokens trying to patch skills, often hitting blocked tool calls because `patch` is denied in cron's whitelist.
 
-**Prevention — add this to every cron prompt:**
+**Prevention — add `field-notes` to the skills array and this line to every cron prompt:**
 
 ```markdown
 ⚠️ Do NOT modify any skills during this run. The `patch` tool and
 `skill_manage` are blocked in cron. If you notice a skill instruction
-that's wrong, missing, or outdated, document each observation as a
-date-stamped bullet in a ## Field Notes section at the end of your output:
-
-- **YYYY-MM-DD** — Which skill/document is affected?
-  - What's wrong (the current incorrect instruction)
-  - Correct behavior (what should it say instead)
-  - Evidence (what you observed during the run that revealed the issue)
-
-I will review and apply changes interactively. When a note is addressed,
-it gets marked <!-- APPLIED --> and moved to the skill's changelog.
+that's wrong, missing, or outdated, document it in Field Notes
+(instructions provided by the `field-notes` skill loaded above).
+I will review and apply changes interactively.
 ```
+
+Add `"field-notes"` to the cron job's `skills` array (before the main skill):
+
+```
+skills: ["field-notes", "your-main-skill"]
+```
+
+This injects the canonical Field Notes instructions into every run — one file to maintain, every job picks up changes automatically. No more copy-pasting template blocks into prompts.
 
 To surface pending notes across all cron jobs:
 ```bash
