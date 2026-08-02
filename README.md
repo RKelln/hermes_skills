@@ -30,6 +30,16 @@ Use templates from Typst Universe, generate documents from data, inspect output
 programmatically with `typst eval`. Covers agent verification methods (HTML/PNG/pdftotext),
 conversion tables for Markdown and LaTeX, and a common-errors quick-reference.
 
+### `/web-content-extraction` — Safe web extraction
+
+One-shot web page → clean markdown via the bundled `webx` script: tirith safety
+scan → download (curl with bot-detection fallback to curl-cffi) → extraction
+(trafilatura / JSON-LD articleBody / regex) → content scoring → validation.
+Handles paywalls (HBR-style JSON-LD), bot-blocked sites, PDFs (pdftotext), and
+classifies failure walls (captcha, JS-rendered CSR, video) with targeted hints.
+Ships with a 24-case regression suite covering every extraction path:
+`webx --selftest` (suite at `scripts/webx-tests.tsv`).
+
 ## Install
 
 ```bash
@@ -38,6 +48,10 @@ hermes skills install RKelln/hermes_skills/skill-research
 hermes skills install RKelln/hermes_skills/skill-builder
 hermes skills install RKelln/hermes_skills/skill-upstream-sync
 hermes skills install RKelln/hermes_skills/typst
+hermes skills install RKelln/hermes_skills/web-content-extraction
+# webx needs to be on PATH — symlink it once:
+ln -s ~/.hermes/skills/research/web-content-extraction/scripts/webx ~/.local/bin/webx
+webx --selftest   # verify the install
 ```
 
 ## Use
@@ -47,6 +61,7 @@ hermes skills install RKelln/hermes_skills/typst
 /skill-builder        # Build a new skill with research + review pipeline
 /skill-upstream-sync  # After hermes update: merge upstream changes into customized skills
 /typst               # Create a PDF, CV, letter, paper, or formatted document
+webx <URL>           # Extract any web page to clean markdown (one call)
 ```
 
 ## Requirements
