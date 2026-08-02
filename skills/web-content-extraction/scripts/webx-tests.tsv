@@ -1,0 +1,77 @@
+# webx regression suite
+#
+# One URL per line: URL<TAB>expected
+# expected:
+#   ok:any:MINCHARS        extraction must succeed with >= MINCHARS chars, any method
+#   ok:METHOD:MINCHARS     extraction must succeed via METHOD (trafilatura|json-ld|regex|pdftotext) with >= MINCHARS
+#   fail                   must fail gracefully (non-zero exit / error result, no garbage content)
+#
+# Lines starting with # are rationale, not tests. Thresholds are set at
+# roughly 40-50% of the measured baseline so page edits don't false-alarm;
+# a drop below them means real content loss. Run with: webx --selftest
+#
+# Baseline: 2026-08-02 gauntlet run (20 URLs, 17 extracted, 3 graceful fails).
+
+# --- trafilatura path: standard articles, blogs, news ---
+# Wikipedia (special case: plain HTML pipeline; JSON API alternative documented in skill)
+https://en.wikipedia.org/wiki/Neo-Luddism	ok:any:5000
+# Wikipedia large page: stresses 2MB+ download and very long extraction
+https://en.wikipedia.org/wiki/Artificial_intelligence	ok:any:20000
+# Substack (known web_extract failure; trafilatura handles)
+https://www.interconnects.ai/p/6-months-to-live-for-open-models	ok:any:3000
+https://noeticengines.substack.com/p/you-cannot-pause-what-you-cannot	ok:any:3000
+# WordPress news site (trafilatura works here)
+https://neurosciencenews.com/social-cooperation-evolution-psychology-31087/	ok:any:3000
+# NVIDIA corporate blog (was a trafilatura 0-byte case on this box)
+https://blogs.nvidia.com/blog/japan-ecosystem-2026/	ok:any:5000
+# Custom static site (primeradiant; trafilatura 0-byte case elsewhere)
+https://primeradiant.com/blog/2026/smevals.html	ok:any:3000
+# arXiv abstract page (HTML, not PDF)
+https://arxiv.org/abs/2607.27205	ok:any:1500
+# GitHub repo page (README through HTML)
+https://github.com/kyutai-labs/unmute	ok:any:3000
+# HuggingFace model page
+https://huggingface.co/kyutai/pocket-tts	ok:any:3000
+# Short link-blog post (2.8K is the FULL post, not truncation)
+https://simonwillison.net/2026/Jul/31/smevals/	ok:any:1500
+# GitHub Pages docs site (Mage VL)
+https://microsoft.github.io/Mage/vl	ok:any:3000
+# Landing page (intentionally thin — intro + feature list)
+https://agntcy.org/	ok:any:300
+
+# --- json-ld path: paywalled article with publisher-declared articleBody ---
+# HBR paywall: trafilatura only sees the summary (423 chars); json-ld has the full body
+https://hbr.org/2026/07/3-questions-to-pressure-test-your-priorities	ok:json-ld:4000
+
+# --- regex path: paywall / wrong-content WordPress / huge papers ---
+# Stratechery paywall (regex beat trafilatura)
+https://stratechery.com/2026/anthropics-safety-superpower/	ok:any:5000
+# transformer-circuits.pub full paper (hits regex 100K cap)
+https://transformer-circuits.pub/2026/workspace/	ok:any:20000
+# WordPress where trafilatura grabs wrong content; regex must win
+https://www.marktechpost.com/2026/07/24/datalab-marker-v2-vs-mineru-docling-and-liteparse-benchmark-breakdown/	ok:any:3000
+# X/Twitter post (fragile — X changes often; low threshold)
+https://x.com/DAIEvolutionHub/status/2075914634406863030	ok:any:500
+
+# --- curl-cffi rescue path: bot-blocked site ---
+# Anthropic research page (plain curl blocked; curl-cffi rescue or direct 200)
+https://www.anthropic.com/research/global-workspace	ok:any:15000
+
+# --- pdf path ---
+https://arxiv.org/pdf/2605.12357	ok:pdftotext:10000
+
+# --- graceful failures (must exit non-zero with a clear reason, never garbage) ---
+# PubMed is a FLAKY reCAPTCHA wall: sometimes the curl-cffi rescue slips
+# through (real abstract extracted), sometimes the wall holds (graceful fail
+# with a captcha hint). Both outcomes are correct behavior for webx, so this
+# case is excluded from the strict suite to keep it deterministic. Re-enable
+# manually if you want to probe it: expect fail is the conservative baseline.
+# https://pubmed.ncbi.nlm.nih.gov/42150079/	fail
+# kyutai blog is a Next.js CSR shell — content absent from static HTML
+https://kyutai.org/blog/2026-01-13-pocket-tts/	fail
+# YouTube is a video, not an article (use youtube-content skill / fetch_transcript.py)
+https://youtu.be/HbQ-t8GXYTA	fail
+# Styled 404 (HBR returns 200-status page with "Sign In / Go back")
+https://hbr.org/this-page-does-not-exist-xyz	fail
+# DNS failure
+https://nonexistent-domain-zzz123.invalid/	fail

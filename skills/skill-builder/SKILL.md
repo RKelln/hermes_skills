@@ -94,6 +94,34 @@ metadata:
 
 ## Procedure
 
+### Phase 0: Pre-Create Overlap Check (MANDATORY — do not skip)
+
+**Core principle: ONE skill per capability (output format × tool). Genres and projects are REFERENCE FILES, not skills.**
+
+Hermes has a documented tendency to over-develop skills: given several projects that want beautiful HTML / typeset PDF output (Keeper, Covenant, fiction, essays), it created 8-10 near-duplicate skills (literary-html, literary-typst, literary-typesetting, fiction-typesetting, fiction-typography, markdown-publishing, markdown-to-typst…) instead of one generalized skill per output format with genre-specific reference files. This wastes context (all get listed in the skill index), splits maintenance, and makes the index harder to scan. The correct shape:
+
+```
+markdown-html/          <- ONE skill for HTML output
+├── SKILL.md            <- generalized procedure
+└── references/
+    ├── literary-essay.md   <- genre conventions
+    └── project-manifesto.md
+```
+
+Before ANY `skill_manage(action='create')` call, run the overlap check. This is a hard gate:
+
+1. Run `skills_list()` (or `ls ~/.hermes/skills/`) and read every existing skill's name + description.
+2. Classify the proposed skill against existing ones:
+   - **DUPLICATE** — same output/tool/use case as an existing skill. → Do NOT create. Tell the user the existing skill and offer to improve that one instead.
+   - **ADJACENT** — same output/tool, different use case or audience (fiction vs essay vs manifesto). → Do NOT create. **The genre variation becomes `references/<genre>.md` inside the existing skill** (one file per genre, with a pointer line in SKILL.md), or is merged in via `skill_manage(action='patch')`. Never a new skill for a genre.
+   - **PARTIAL** — proposed skill is a subset of an existing skill. → Do NOT create. The existing skill already covers it.
+   - **NONE** — genuinely no overlap (different output format or different tool). → Green light to create.
+3. If the user explicitly pushes back ("no, I want a separate skill"), create it — but record the overlap in the description frontmatter so future scans can find it (`description: "... Overlaps with <existing-skill>: covers <use case>."`).
+
+**Probe:** compare on output format + tool + use case. Two skills that produce HTML from markdown are duplicates even if one says "literary" and the other says "fiction". If the only difference is genre, style, or tone, it's a DUPLICATE — and the genre belongs in a reference file.
+
+**Post-create review (also mandatory):** after ANY skill creation (or any session that created 2+ skills), re-scan the library and ask: "could this have been a reference file inside an existing skill?" If yes, say so to the user and offer to restructure before the skill propagates. New skills created in one sitting are a burst signature — audit them as a group before declaring done.
+
 ### Phase 1: Research (don't reinvent)
 
 Load the `skill-research` skill (must be installed) and search all registries:
