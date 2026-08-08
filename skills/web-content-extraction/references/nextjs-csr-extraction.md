@@ -45,6 +45,35 @@ browser_console(expression='document.body.innerText')
 
 See `browser-content-extraction` reference for the full pattern.
 
+## MDX-compiled landing pages: prose IS in `__NEXT_DATA__`, as JSX string literals
+
+Distinct from the CSR case above: some Next.js marketing/landing blogs (hit 2026-08-07: **ii.inc / Intelligent Internet** — Emad Mostaque's Common Wealth series) serve the full article prose inside the inline `__NEXT_DATA__` script, but compiled to an MDX JSX function rather than stored as plain `articleBody`. `webx`/regex gets only the *partial* opening; the closing prose is missed.
+
+**Recovery recipe** (download-then-process, never pipe from network):
+
+```python
+import json, re
+html = open('/tmp/page.html', encoding='utf-8', errors='replace').read()
+m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
+data = json.loads(m.group(1))
+src = data['props']['pageProps']['mdxSource']['compiledSource']   # <-- the compiled JSX function body
+# prose text nodes are double-quoted string literals inside jsx()/jsxs() calls
+strings = re.findall(r'"((?:[^"\\]|\\.)*)"', src)
+seen, out = set(), []
+for s in strings:
+    s = s.encode().decode('unicode_escape', errors='replace')
+    if s in seen: continue
+    seen.add(s)
+    if len(s.strip()) >= 25 and not s.strip().startswith(('_', 'const', '{', 'function', 'useMDX', 'components', 'props', 'children')):
+        out.append(s.strip())
+print("\n\n".join(out))
+```
+
+Notes:
+- The prose-bearing path is `pageProps.mdxSource.compiledSource` (key insight: `mdxSource`, not `articleBody` — `grep -c articleBody` returned 0 on this site).
+- Filtering keeps long string literals and drops JS boilerplate (`_jsx`, `props`, `_components`, etc.). Compile-time `\n` escapes come back via `unicode_escape`.
+- This is a **manual `__NEXT_DATA__` dump + python3 script** — so the "content is in `__NEXT_DATA__`, just compiled" marker differs from true CSR (Strategy A/B/C above). Don't conclude the content is unreachable just because `grep articleBody` is 0.
+
 ## What NOT to do
 
 - Do NOT grep for content in raw HTML — it's not there
