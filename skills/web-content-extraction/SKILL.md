@@ -94,6 +94,8 @@ uvx --from trafilatura python3 -c "import trafilatura; print(trafilatura.extract
 
 `curl-cffi` impersonates Chrome's TLS fingerprint.
 
+**Batch fallback for already-downloaded HTML:** when several pages are on disk (curl, `webx --keep`) and you want whole-page text in one pass — or when webx/trafilatura are unavailable — run the skill's generic extractor: `python3 scripts/html_extract.py page1.html page2.html` (writes `<name>.md` beside each; strips script/style/nav/footer, keeps headings as markdown, prints char counts — verify they're non-trivial). Write it as a file, never an inline `python3 -c` inside a shell `||` fallback: shell variable interpolation silently breaks the inline code and produces empty outputs with no error (hit 2026-08-08, Olares research).
+
 **⚠️ Always validate trafilatura output.** Trafilatura can return non-zero, semantically wrong content — e.g., returning a js-cookie README or related-post sidebar instead of the article body. Wrong-content failures produce output that looks plausible (thousands of chars, non-empty) but is useless. This is distinct from the 0-bytes or <200-chars failure. After extraction, quickly check: does the first few lines look like the expected article (title, abstract, headline)? If it's cookie consent text, npm library docs, "related posts," or marginalia, fall through to the targeted extraction method below. Do not rely on char count as a validity signal.
 
 ### Pipeline B: Browser Tool (JS-heavy pages)
@@ -110,6 +112,27 @@ document.querySelector('article')?.innerText || document.body.innerText
 ```
 
 Pre-scroll for lazy-loaded content: `browser_scroll(direction='down')` before the console query. Write output to a local file immediately so you don't lose it on navigation.
+
+### Pipeline C: Kitesurf stateless render (JS-heavy pages WITHOUT the browser tool)
+
+Cloudflare's Kitesurf (beta, free) is a stateless browser on Workers — Rust/WASM rendering, CDP-compatible, 3-7x lighter than Chromium. **Verified 2026-08-08** on the public playground (`kitesurf.cloudflare.app`). Use it when the browser tool is unavailable (cron/no_agent scripts, kanban workers, CLI-only contexts) or when you want a one-shot curl instead of a browser session.
+
+**Endpoints (playground limits: 20s CPU / 60s wall per navigation):**
+```bash
+curl -sL "https://kitesurf.cloudflare.app/html?url=<URL-ENCODED>" -o page.html      # rendered DOM after JS
+curl -sL "https://kitesurf.cloudflare.app/pdf?url=<URL-ENCODED>" -o page.pdf        # real PDF (verified 9-page)
+curl -sL "https://kitesurf.cloudflare.app/screenshot?url=<URL-ENCODED>" -o page.png # 1920x1080 PNG
+# /html is the workhorse — JS executes (verified: React TodoMVC rendered, The Guardian 1.35MB rendered DOM)
+```
+
+**Verified behavior (2026-08-08):**
+- JS rendering works (React/SPA content present in /html output) — The Guardian, TodoMVC React
+- /pdf produces real multi-page PDFs; /screenshot produces real PNGs
+- **Failures are loud but site-specific**: BBC → "no HTML produced (page-script returned empty)" or "waitUntil timed out after 30000ms" — heavyweight/bot-protected sites can fail. Retry once, fall back to browser tool or curl-cffi.
+- URL must be `https://` (http:, data:, javascript:, file: rejected)
+- tirith may flag `kitesurf.cloudflare.app` as medium (lookalike_tld heuristic) — it's Cloudflare's own domain; proceed.
+
+**Use cases:** JS-heavy extraction in scripts/workers; PDF-ifying a page for archival; screenshot for verification. For interactive/scroll-heavy pages, still prefer the browser tool.
 
 ### Method 1: Cloudflare Markdown for Agents
 
