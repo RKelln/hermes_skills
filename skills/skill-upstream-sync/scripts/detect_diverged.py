@@ -2,14 +2,17 @@
 """
 Detect bundled skills where local has diverged from upstream.
 
-Three categories:
+Four categories:
   TRUE_DIVERGENCE: local != upstream AND both differ from origin
     → User has custom changes, upstream has new changes. Needs merge review.
-  MANIFEST_STALE: local == upstream but both differ from origin  
+  MANIFEST_STALE: local == upstream but both differ from origin
     → Upstream was updated and local was synced but manifest not re-baselined.
     → Fix with: hermes skills reset <name> (no --restore)
   UPSTREAM_ONLY: local == origin, upstream != origin
     → Upstream changed but local untouched. hermes update should handle this.
+  LOCAL_ONLY: local != origin, upstream == origin
+    → Local changed but upstream untouched (e.g. stray cache files). No merge
+    needed; check `hermes skills list-modified` and clean or keep deliberately.
 """
 
 import hashlib
@@ -41,6 +44,13 @@ def find_skill_skel(skills_root: Path, skill_name: str) -> Path | None:
     for depth in range(1, 4):
         pattern = "/".join(["*"] * depth) + "/SKILL.md"
         for skel in skills_root.glob(pattern):
+            # Hidden dirs (e.g. .archive/) must not shadow a live skill: a
+            # same-named archived copy would be hashed instead, misclassifying
+            # the live skill (2026-08-13: ocr-and-documents reported
+            # upstream_only while its live copy was broken).
+            rel_parts = skel.relative_to(skills_root).parts[:-1]
+            if any(p.startswith(".") for p in rel_parts):
+                continue
             if skel.parent.name == skill_name:
                 return skel
     return None
@@ -66,6 +76,7 @@ def main():
     true_divergence = []
     manifest_stale = []
     upstream_only = []
+    local_only = []
     missing = []
 
     for skill_name, origin_hash in sorted(manifest.items()):
@@ -103,6 +114,8 @@ def main():
                 })
         elif upstream_changed and not local_changed:
             upstream_only.append(skill_name)
+        elif local_changed and not upstream_changed:
+            local_only.append(skill_name)
 
     # Human-readable summary
     if true_divergence:
@@ -119,6 +132,10 @@ def main():
         names = ", ".join(upstream_only)
         print(f"UPSTREAM_ONLY ({len(upstream_only)}): {names}")
 
+    if local_only:
+        names = ", ".join(local_only)
+        print(f"LOCAL_ONLY ({len(local_only)}): {names}")
+
     if missing:
         print(f"MISSING_LOCAL ({len(missing)}): {', '.join(missing)}")
 
@@ -130,6 +147,8 @@ def main():
         "manifest_stale_count": len(manifest_stale),
         "upstream_only": upstream_only,
         "upstream_only_count": len(upstream_only),
+        "local_only": local_only,
+        "local_only_count": len(local_only),
         "missing": missing,
     }
 

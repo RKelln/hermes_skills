@@ -70,7 +70,8 @@ python3 SKILL_DIR/scripts/detect_diverged.py
 The script produces:
 - **DIVERGED**: local ≠ upstream AND both differ from origin — needs merge review
 - **UPSTREAM_ONLY**: local untouched, upstream changed — `hermes update` will handle
-- **MISSING_LOCAL**: platform-specific skills not applicable (e.g., apple-* on Linux) — ignore
+- **MISSING_LOCAL**: platform-specific skills not applicable (e.g., apple-* on Linux) — ignore. Also surfaces manifest entries whose live copy is gone (skills pruned to `.archive/`) — same ignore, but a large list means stale manifest entries (t_7ef96bdd).
+- **LOCAL_ONLY**: local changed, upstream untouched (e.g. stray `__pycache__` or cache files). No merge needed — check `hermes skills list-modified` and clean junk or keep deliberately.
 
 Note: STALE_MANIFEST (local == upstream but manifest hash wrong) is possible in
 theory but extremely rare — it would require a Hermes bug in manifest writing. If
@@ -168,21 +169,36 @@ When running interactively, process one skill at a time so the user can review.
   text (e.g., "Verify SSH to GitHub works first" instead of `ssh -T <ssh-url>`).
   Existing lines already in the repo won't trigger this (the regex only checks
   `+`-prefixed diff additions), so only newly-added SSH URLs need this treatment.
+- **Hidden-dir shadowing (fixed 2026-08-13)**: `find_skill_skel()` globs match
+  dot-directories, so a same-named skill under `.archive/` shadowed a broken
+  live skill and misclassified it as UPSTREAM_ONLY (ocr-and-documents incident).
+  The function now skips any path component starting with `.`.
+- **Silent local-only changes (fixed 2026-08-13)**: a local change with no
+  upstream change fell through every branch and was reported nowhere (stray
+  `__pycache__` incident). Now surfaced as LOCAL_ONLY.
 
 ## Cron Job Setup
 
 To run this skill automatically on a schedule:
 
 ```bash
-# Copy the detection script to the cron-accessible location
+# Cron scripts must live in ~/.hermes/scripts, and the scheduler blocks
+# symlinks — so create a thin wrapper that execs the CANONICAL copy in the
+# skill dir. Never `cp` the script: a second copy drifts (single-copy rule).
+# The wrapper is NOT optional: _run_job_script() rejects scripts that resolve
+# outside HERMES_HOME/scripts/ (absolute paths and symlink escapes included),
+# and the canonical copy must ship inside the skill dir.
 mkdir -p ~/.hermes/scripts
-cp SKILL_DIR/scripts/detect_diverged.py \
-   ~/.hermes/scripts/detect_skill_divergence.py
+cat > ~/.hermes/scripts/detect_skill_divergence.sh << 'EOF'
+#!/usr/bin/env bash
+exec python3 "$HOME/.hermes/skills/hermes/skill-upstream-sync/scripts/detect_diverged.py" "$@"
+EOF
+chmod +x ~/.hermes/scripts/detect_skill_divergence.sh
 ```
 
 Then create the cron job using the `cronjob` tool or `hermes cron create`:
 
-- **Script**: `detect_skill_divergence.py` (runs first, stdout injected as context)
+- **Script**: `detect_skill_divergence.sh` (wrapper — runs first, stdout injected as context)
 - **Skill**: `skill-upstream-sync`
 - **Model**: any strong reasoning model — integration passes benefit from larger context and reasoning capability
 - **Schedule**: daily at 9am: `0 9 * * *`
