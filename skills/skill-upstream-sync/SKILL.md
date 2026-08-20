@@ -1,7 +1,7 @@
 ---
 name: skill-upstream-sync
 description: Detect and integrate upstream changes to bundled skills that have local modifications. Runs diff review and merges best of both.
-version: 1.2.0
+version: 1.3.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -24,6 +24,25 @@ manifest is stale (just re-baseline, no merge needed).
 - After `hermes update` when you see `~N user-modified (kept)` in the output
 - Periodically, to catch upstream improvements to skills you've customized
 - Before a big task where stale skills might cause problems
+
+## Merge Tiering Policy (Ryan-approved 2026-08-19)
+
+**This cron is the SANCTIONED EXCEPTION to "never modify skills in cron"** (the rule in field-notes / skill-maintenance / cron prompts). The exception is scoped: merges run under this policy, report visibly, and genuine conflicts go to Ryan. Everything is git-tracked and revertable (`hermes skills reset --restore <name>`).
+
+| Tier | When | Action | Visibility |
+|------|------|--------|-----------|
+| 1 | No conflict — upstream-only change, local-only change, or disjoint sections | Auto-merge per Phase 2 | One-line summary |
+| 2 | True divergence in different sections, or same-section where ONE side is clearly richer/correct (upstream fixed a bug; local only added env notes) | Auto-merge per Phase 2 | Diff summary in the report |
+| 3 | Same-section conflict where BOTH are defensible, OR the target skill has an open SKILL-PATCH / blocked decision ticket in Ryan's lane | **DO NOT merge** — create a SKILL-PATCH ticket (Ryan's lane, blocked `approval-required:`) with both versions + proposed resolution | Ticket in Ryan's lane |
+
+**Tier determination (per skill, before merging):**
+1. Read both versions fully (Phase 2 step 1).
+2. Changed sections don't overlap → Tier 1. Overlap with a clear winner → Tier 2. Same section, both defensible (upstream redesign vs local customization) → Tier 3.
+3. **Board check before merging:** if the target skill has an open SKILL-PATCH ticket (blocked `approval-required:`) or a blocked decision ticket, it's Tier 3 regardless of diff shape — the pending human-gated change wins. A silent merge would overwrite Ryan's in-flight decision.
+
+**Publish rule (Phase 3):** Tier 1–2 merges publish with the report (safety scan stays). Tier 3 NEVER publishes. If ANY skill is Tier 3, skip publishing entirely that run — never push a partial set with a conflicted skill missing. The ticket's resolution decides the merge.
+
+**Report requirement:** the delivery MUST include, per merged skill: what upstream changed, what we kept, and the diff summary for Tier 2. This is the post-hoc review surface — Ryan reads it after the fact; anything wrong is revertable.
 
 ## Built-in Tools First
 
@@ -79,6 +98,8 @@ it appears, just run `hermes skills reset <name>`.
 
 ### Phase 2: Integrate True Divergences
 
+**Apply the Merge Tiering Policy above.** Tier 1–2 divergences merge here; Tier 3 conflicts are NOT merged — create a SKILL-PATCH ticket (Ryan's lane, blocked `approval-required:`) with both versions and a proposed resolution, per the policy. If any skill is Tier 3, skip the publish phase entirely.
+
 For each skill in DIVERGED:
 
 1. **Read both versions** using read_file:
@@ -125,7 +146,10 @@ Summarize what was done:
 ## Batch Mode for Cron
 
 When running as a cron job, process ALL diverged skills in one pass. The detection
-script output is injected as context.
+script output is injected as context. **Apply the Merge Tiering Policy**: merge
+Tier 1–2, ticket Tier 3 (SKILL-PATCH, Ryan's lane, blocked `approval-required:`),
+skip publish if any skill is Tier 3, and include the per-skill diff summary in
+the report.
 
 ### One-at-a-time mode
 When running interactively, process one skill at a time so the user can review.

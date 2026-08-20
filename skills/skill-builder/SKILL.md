@@ -7,7 +7,7 @@ metadata:
   hermes:
     tags: [hermes, skills, authoring, build, publish, quality]
     category: hermes
-    related_skills: [skill-research, requesting-code-review]
+    related_skills: [skill-research]
 ---
 
 # Skill Builder
