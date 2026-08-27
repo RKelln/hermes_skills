@@ -15,7 +15,7 @@ These are **not** PDFs — they're JS-rendered, multi-section documents with:
 
 ### 1. Skip web_extract — it won't help
 
-`web_extract` on Anthropic.com or similar JS-heavy venues returns bot-detection errors. The ddgs backend is search-only anyway. Go directly to browser.
+`web_extract` on Anthropic.com or similar JS-heavy venues can return bot-detection errors. Go directly to browser (or curl-cffi).
 
 ### 2. Navigate with browser
 
