@@ -7,7 +7,7 @@ metadata:
   hermes:
     tags: [typst, typesetting, pdf, document, template, typst-universe]
     category: productivity
-    related_skills: [markdown-publishing, literary-html, nano-pdf]
+    related_skills: [markdown-typst-pdf, markdown-html]
 ---
 
 # Typst
@@ -411,6 +411,9 @@ Use the mitex package if you need to embed raw LaTeX math:
 | "unexpected argument" | `=` instead of `:` for named args | Named args use `:`: `func(name: value)` |
 | "expected content, found string" | Content/string type mismatch | Use `[#str-var]` to embed string in content |
 | set/show rule has no effect | Rule placed after content | Place set/show rules before the content they target |
+| "unexpected argument" with `family` | `#set text()` uses `font` not `family` | Use `#set text(font: "Name")` — differs from CSS/LaTeX conventions |
+| "unexpected argument" with `stroke` in `#let` | `#let x = stroke: ...` is not valid; named-arg syntax doesn't work in `#let` | Inline the stroke value in the function call, or store as dict: `#let s = (stroke: 0.5pt + luma(180))` then pass `..s` |
+| "unclosed delimiter" on `*` in `[*text*]` | Markup `*bold*` immediately after `[` can confuse the parser when the content block is a function argument | Add a space: `[ *text* ]` or use `#text(weight: "bold")[text]` instead |
 
 ## Verification
 
