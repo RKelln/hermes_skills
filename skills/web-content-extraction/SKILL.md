@@ -37,6 +37,9 @@ Is the page JS-heavy / SPA / paywalled?
   NO  → webx <URL> (one call: tirith → download → extract → validate; see Pipeline A)
           → Validate output: does it look like the expected article?
              Wrong content (library docs, nav text, cookie consent)? → targeted HTML extraction
+             Short but plausible, ends mid-sentence, no error? → head-truncated page
+               (bot-guarded, e.g. Atlantic podcast pages) → rerun `webx <URL> --out` — see
+               references/truncated-extraction-escalation.md
              <200 chars on a known content-rich page? → card/layout page → browser tool
              Next.js CSR page (trafilatura returns 0 bytes, HTML has \<div id="__next"\> shell)?
                → see references/nextjs-csr-extraction.md — try GitHub README, tech report, or browser tool
