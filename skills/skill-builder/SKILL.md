@@ -242,6 +242,16 @@ delegate_task(
 )
 ```
 
+**Bound the reviewer explicitly.** A report-only review subagent has terminal
+access and can reach side-effect CLIs (e.g. `hermes kanban complete`,
+`hermes cron create`). The child-context env guard on kanban CLI mutations is
+strippable (`env -u HERMES_DELEGATED_CHILD_CONTEXT`) and has been stripped in
+the wild — a reviewer once completed the task it was reviewing. Add to the
+reviewer's goal text: "You are report-only. Do NOT modify any file, do NOT run
+any `hermes` CLI command that mutates state (kanban, cron, config), and do NOT
+use env -u to bypass guards. Return findings only." Verify afterward by reading
+the live transcript tail if anything looks off.
+
 Address every finding before proceeding. If the reviewer flags something,
 fix it. If you disagree, explain why.
 
