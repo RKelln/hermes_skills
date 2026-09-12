@@ -186,3 +186,29 @@ skill_view(name='web-content-extraction', file_path='references/extraction-metho
 - **trafilatura CLI `-i <file>` can misfire on plain Next.js pages too** — hit 2026-08-02 on a valid 137KB hbr.org page: same `Discarding URL: <!DOCTYPE html>...` warning, exit 0, 0 bytes, no heavy instrumentation involved. Before regex-stripping the HTML, try the cheaper fix: call the Python library API directly. `uvx --from trafilatura python3 -c "import trafilatura; t=trafilatura.extract(open('page.html').read(), output_format='markdown'); open('page.md','w').write(t or '')"`. Still tiny output (<500 chars)? The page is paywalled — go to the JSON-LD pitfall below.
 - **Paywalled HBR/Next.js-CMS articles: full body ships in JSON-LD `articleBody`** — hit 2026-08-02 on hbr.org. Rendered HTML shows only summary + lede (trafilatura got 423 chars); the complete body is in the page's structured data. Check `grep -c 'articleBody' page.html`; if ≥1, extract via local python3 heredoc (download-then-process, no network pipes): regex `"articleBody"\s*:\s*(".*?")\s*,\s*"` + `json.loads` on the capture — got the full 8,025-char body this way. No `articleBody`? Walk the `<script id="__NEXT_DATA__">` JSON for long string fields named articleBody/body/content. Extracted bodies are single-line files; `fold -s -w 110` before read_file. Full recipe: `references/paywalled-jsonld-extraction.md`.
 - **Hermes venv pip bootstrap** if needed: `~/.hermes/hermes-agent/venv/bin/python -m ensurepip --upgrade` then `-m pip install html2text`
+
+
+## Reference index (load on demand)
+
+Load with `skill_view(name='research/web-content-extraction', file_path='<path>')`. The body above links the most-used ones; this is the full set so nothing is orphaned.
+
+- `references/substack-image-evidence-recovery.md` — Recovering image-borne evidence from Substack / CMS posts.
+- `references/github-repo-research.md` — GitHub Repo Deep Recon (structure, images, deployment).
+- `references/long-form-web-paper-reading.md` — Reading Long-Form Web-Native Research Papers (Transformer Circuits style).
+- `references/form-schema-extraction.md` — Form Schema Extraction — Tally.so and similar client-rendered forms.
+- `references/uvx-one-shot-cli.md` — uvx One-Shot CLI: Run Python CLI Tools Without Installation.
+- `references/interaccess-scraper-example.py` — Minimal BeautifulSoup extraction example for Webflow/CMS listing pages where trafilatura returns empty.
+- `references/cloudflare-firecrawl-details.md` — Cloudflare & Firecrawl Details.
+- `references/last-sync-schema.md` — last_sync.json schema.
+- `references/author-hosted-fulltext-books.md` — Author-hosted full-text books (the free-full-text route).
+- `references/lab-research-report-patterns.md` — Reading lab research reports: announcement → full report, and long-report cache search.
+- `references/arxiv-latexml-html-extraction.md` — LaTeXML arXiv HTML Extraction (Math-Heavy Papers).
+- `references/curl-cffi-trafilatura-pipeline.md` — curl-cffi + trafilatura Pipeline.
+- `references/paywalled-article-triangulation.md` — Paywalled / Blocked Article Triangulation.
+- `references/interaccess-scraper.py` — Full working scraper example: BeautifulSoup targeted extraction, sitemap discovery, manifest incremental sync.
+- `references/hacker-news-thread-extraction.md` — Hacker News Thread Extraction + Bot-Blocked Primary Fallback.
+- `references/raw-layer-batch-ingest.md` — Batch landing fetched sources into the raw layer.
+- `references/js-rendered-chart-data-extraction.md` — Extracting charts from JS-rendered pages (the figure that isn't an image).
+- `references/large-cached-document-reading.md` — Reading a large document already saved to disk as markdown.
+- `references/starlight-docs-extraction.md` — Starlight / Docusaurus Documentation Site Extraction.
+- `references/utf8-double-encoding-artifacts.md` — UTF-8 Double-Encoding Artifacts: Troubleshooting Table.
