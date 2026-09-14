@@ -8,7 +8,8 @@ InterAccess website scraper — full working example of:
   - Structured last_sync.json for downstream agent consumption
   - Rate limiting via --delay flag
 
-Working copy: /home/experimance/Documents/assistant/interaccess_scraper.py
+Abridged extract — the manifest/sync/discovery layer of the original scraper is
+trimmed out; everything it teaches is the patterns listed below.
 
 Key patterns demonstrated:
   1. Three page type detectors (standard, VF microsite, listing)
@@ -206,8 +207,8 @@ def scrape_vf(soup: BeautifulSoup, url: str) -> str:
     return "\n".join(out)
 
 
-# For full sync/manifest/discovery functions, see the working copy at
-# /home/experimance/Documents/assistant/interaccess_scraper.py
+# For the full sync/manifest/discovery functions, see the complete scraper — the
+# abridged extract here ends at the helpers above.
 # Key additions in the full version:
 #   - Manifest class with JSON persistence
 #   - sync() with sitemap diff + HEAD check change detection

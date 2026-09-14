@@ -29,7 +29,7 @@ When the user shares a lab research page:
 
 When web_extract SUCCEEDS on a long report but truncates to head+tail over the char budget,
 the FULL text is cached to disk — the result footer gives the cache path
-(e.g. `/home/experimance/.hermes/cache/web/<host>-<hash>.md`). The head carries the
+(e.g. `~/.hermes/cache/web/<host>-<hash>.md`). The head carries the
 intro/results, the tail the references; the load-bearing middle (limitations, methodology,
 verbatim quotes) is omitted.
 
