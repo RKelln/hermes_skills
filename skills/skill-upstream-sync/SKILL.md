@@ -89,7 +89,7 @@ python3 SKILL_DIR/scripts/detect_diverged.py
 The script produces:
 - **DIVERGED**: local ≠ upstream AND both differ from origin — needs merge review
 - **UPSTREAM_ONLY**: local untouched, upstream changed — `hermes update` will handle
-- **MISSING_LOCAL**: platform-specific skills not applicable (e.g., apple-* on Linux) — ignore. Also surfaces manifest entries whose live copy is gone (skills pruned to `.archive/`) — same ignore, but a large list means stale manifest entries (t_7ef96bdd).
+- **MISSING_LOCAL**: platform-specific skills not applicable (e.g., apple-* on Linux) — ignore. Also surfaces manifest entries whose live copy is gone (skills pruned to `.archive/`) — same ignore, but a large list means stale manifest entries.
 - **LOCAL_ONLY**: local changed, upstream untouched (e.g. stray `__pycache__` or cache files). No merge needed — check `hermes skills list-modified` and clean junk or keep deliberately.
 
 Note: STALE_MANIFEST (local == upstream but manifest hash wrong) is possible in
