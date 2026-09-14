@@ -14,7 +14,7 @@ Bonus: the landing page carries the author's own commons note — "Cheaper than 
 ## Probe which letter file holds the section you want
 
 ```bash
-cd ~/Documents/assistant/research/.tmp
+cd "$(mktemp -d)"   # scratch dir for the probe fetches
 for f in ch6-a ch6-b ch6-c ch6-d ch6-e ch6-f ch6-g; do
   code=$(curl -s -o "$f.html" -w "%{http_code}" "https://kk.org/mt-files/outofcontrol/$f.html")
   echo "$f $code $(wc -c < $f.html)"
