@@ -1,0 +1,52 @@
+# Candidate URLs for the extraction bench — probe pass (2026-09-13)
+#
+# URL<TAB>label   (label is free text; the probe characterizes the page)
+# Reused from the existing webx-tests.tsv gauntlet where a case was already
+# proven, plus new candidates for axes that suite does not cover.
+# Lines starting with # are comments.
+
+# --- article-static / long-form prose ---
+https://en.wikipedia.org/wiki/Neo-Luddism	wiki-article
+https://en.wikipedia.org/wiki/Artificial_intelligence	wiki-very-long
+https://www.interconnects.ai/p/6-months-to-live-for-open-models	substack-article
+https://neurosciencenews.com/social-cooperation-evolution-psychology-31087/	wordpress-news
+https://blogs.nvidia.com/blog/japan-ecosystem-2026/	corporate-blog
+https://primeradiant.com/blog/2026/smevals.html	static-custom-site
+https://simonwillison.net/2026/Jul/31/smevals/	short-link-blog
+
+# --- docs / code / tables ---
+https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html	code-heavy-docs
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map	mdn-code-tables
+https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)	table-heavy
+
+# --- structured data / frameworks ---
+https://hbr.org/2026/07/3-questions-to-pressure-test-your-priorities	paywall-jsonld
+https://stratechery.com/2026/anthropics-safety-superpower/	paywall-regex
+https://arxiv.org/abs/2607.27205	arxiv-abstract
+https://github.com/kyutai-labs/unmute	github-readme
+https://huggingface.co/kyutai/pocket-tts	huggingface-model
+https://microsoft.github.io/Mage/vl	github-pages-docs
+https://transformer-circuits.pub/2026/workspace/	huge-html-paper
+
+# --- js shell / rendering ---
+https://kyutai.org/blog/2026-01-13-pocket-tts/	spa-shell-known
+
+# --- vendor / anti-bot blocked ---
+https://www.anthropic.com/research/global-workspace	vendor-blocked-known
+https://www.ago.ca/	vendor-blocked-toronto
+
+# --- pdf ---
+https://arxiv.org/pdf/2605.12357	pdf-direct
+
+# --- non-english ---
+https://es.wikipedia.org/wiki/Inteligencia_artificial	non-english-wiki
+
+# --- false success / graceful failure ---
+https://hbr.org/this-page-does-not-exist-xyz	styled-404
+https://agntcy.org/	thin-landing
+
+# --- event / venue pages (Togather domain) ---
+https://harbourfrontcentre.com/events/	venue-events-index
+https://www.tarragontheatre.com/whats-on/	venue-whats-on
+https://tranzac.org/events/	venue-events-wordpress
+https://www.rom.on.ca/whats-on	venue-museum-whats-on

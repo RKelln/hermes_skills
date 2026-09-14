@@ -1,0 +1,29 @@
+# Round 2 — targeted probe for the two uncovered axes:
+#   (a) real schema.org Event markup  -> Togather Tier-0 sources (JSON-LD tier)
+#   (b) a genuine consent/cookie wall -> EU news + publisher sites
+#
+# URL<TAB>label
+
+# --- Togather Tier-0 (JSON-LD) event sources: do they actually emit Event? ---
+https://torontorailwaymuseum.com/events/list/	tier0-events-calendar
+https://playwrightsguild.ca/events/list/	tier0-events-calendar-2
+https://torontobluessociety.com/events/	tier0-blues-society
+https://danceontario.ca/community/calendar/	tier0-dance-calendar
+https://www.ludwig-van.com/toronto/events/	tier0-classical-events
+https://torontobotanicalgarden.ca/events/	tier0-botanical-garden
+https://highparknaturecentre.com/events/	tier0-nature-centre
+https://buddiesinbadtimes.com/events/	tier0-theatre
+https://www.bloorwestvillagebia.com/events-calendar/list/	tier0-bia-calendar
+https://luma.com/1rg-calendar	tier0-luma-calendar
+https://jazzbistro.ca/event-calendar/	tier0-jazz-calendar
+https://soraurenpark.com/all-events	tier0-park-events
+https://www.rbcamphitheatre.com/shows	tier0-amphitheatre
+https://www.secondcity.com/shows/toronto	tier0-second-city
+
+# --- consent / cookie wall candidates ---
+https://www.theguardian.com/international	consent-guardian
+https://www.lemonde.fr/	consent-lemonde
+https://www.spiegel.de/	consent-spiegel
+https://www.bbc.com/news	consent-bbc
+https://www.reuters.com/	consent-reuters
+https://www.wired.com/	consent-wired

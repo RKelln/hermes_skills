@@ -1,0 +1,15 @@
+# Round 3 — disabled/problem event sources from an integration audit
+# Probed so each bench case has its own ground-truth HTML and axis evidence.
+# URL<TAB>label
+
+https://www.anotherstory.ca/events/	tog-spa-never-renders
+https://www.churchwellesleyvillage.ca/events	tog-wix-widget
+https://orpheuschoirtoronto.com/2025-2026-concert-season/	tog-freeform-layout
+https://www.reelasian.com/year-round/current-events/	tog-narrative-dates
+https://tafelmusik.org/concerts-events/2025-26-season/	tog-detail-dates
+https://www.xtsc.ca/zuluru/events/	tog-attr-urls
+https://www.uc.utoronto.ca/about-connect-us-events	tog-cloudflare-challenge
+https://fringetoronto.com/fringe/shows	tog-cloudflare-403
+https://www.gladdaybookshop.com/events	tog-robots-disallow
+https://iictoronto.esteri.it/en/gli_eventi/calendario/	tog-date-blob
+https://moca.ca/events	tog-content-mismatch

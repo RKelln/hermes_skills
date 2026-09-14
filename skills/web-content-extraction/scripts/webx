@@ -10,9 +10,12 @@ Pipeline, in order:
   2. DOWNLOAD — curl-cffi (Chrome TLS impersonation, beats bot detection),
                 falls back to plain curl; never pipes network to a processor
   3. EXTRACT  — trafilatura (Python API, not the CLI's URL-list mode),
-                then JSON-LD articleBody / __NEXT_DATA__ scan (catches
-                paywalled pages like HBR that trafilatura only partially sees),
-                then regex article/main/body fallback
+                then the publisher's own structured data (jsonld_extract.py:
+                articleBody — restored WITH its headline — or a __NEXT_DATA__
+                long-text field), then regex article/main/body fallback.
+                The parsed JSON-LD graph is kept as well and reported in --json
+                output as structured_types/structured_data, because for event and
+                catalogue pages the useful payload is the nodes, not the prose.
   4. VALIDATE — drops consent pages and near-empty results; picks the longest
                 credible candidate; PDF URLs go through pdftotext -layout
 
@@ -26,6 +29,16 @@ Usage:
   webx --file urls.txt                  read one URL per line
   webx <URL> --keep                     keep downloaded HTML in /tmp/webx-*
   webx <URL> --force                    proceed even if tirith flags the URL
+  webx <URL> --fallback-engine=crw      opt-in second engine when the page's content is
+                                        not in the served HTML (unusable extraction, or a
+                                        shell-like nav-only result). Rendered text is
+                                        ATTACHED as content_rendered and the original kept;
+                                        if nothing was usable at all, the rendered text
+                                        becomes the content and method reads crw-js.
+                                        A missing binary warns and is skipped — never an
+                                        error. Set CRW_BIN if it is not on PATH. In --json
+                                        output: fallback_status, fallback_reason,
+                                        fallback_method, content_rendered, render_ms.
 
 Metadata (URL, method used, char count, safety score) always goes to stderr,
 so stdout stays clean markdown for the caller.
@@ -41,12 +54,108 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 TIRITH = os.path.join(os.path.expanduser("~"), ".hermes", "bin", "tirith")
+
+# Structured data found while extracting, keyed by URL, surfaced in --json output as
+# structured_types / structured_data / structured_truncated. Populated in process_url
+# so the graph does not have to be threaded through every return path.
+STRUCTURED_BY_URL = {}
+
+# Failure/suspicion classification, keyed by URL, surfaced in --json output as
+# failure_code / failure_remedy / render_candidate, plus extraction_suspect when the
+# extraction "succeeded" but looks content-free. Machine-readable on purpose: an
+# automatic fallback tier branches on these, and failure_hint() renders the same
+# classification for humans, so the two can never drift apart.
+FAILURE_BY_URL = {}
+
+MOUNT_RE = re.compile(r'id=["\'](?:root|app|__next|___gatsby|__nuxt)["\']', re.I)
+FRAMEWORK_MARKERS = ("__next_data__", "__nuxt__", "data-reactroot", "___gatsby", "sveltekit",
+                     "thunderbolt", "wix-warmup", "wix-code", "ant-spin", "ant-layout",
+                     "data-server-rendered")
+CAPTCHA_MARKERS = ("recaptcha", "challenge-platform", 'id="challenge"', "cf-challenge",
+                   "cf_chl_", "just a moment", "attention required")
+SHELL_TEXT_MAX = 2500      # served-text ceiling for "this HTML holds almost nothing"
+MIN_SENTENCES = 2          # below this in a short extraction, the text is fragments, not prose
+
+# Opt-in second engine for pages whose content is not in the served HTML. Results are
+# ATTACHED as content_rendered, never substituted for the original, because a render can
+# be worse than the static text (a page can render to navigation) and the caller is the
+# one who should choose. The reported method is always the one that actually produced the
+# text in `content` — crw's own renderDecision field is not reliable under --js (it
+# reports the auto-selection, not what executed), so we record our own facts instead.
+FALLBACK_BY_URL = {}
+FALLBACK_TIMEOUT = 180
+CRW_BIN_ENV = "CRW_BIN"
+
+
+def find_fallback_binary(engine):
+    """Locate the fallback binary: $CRW_BIN, then PATH, then ~/.local/bin.
+
+    No hard-coded private paths: webx ships publicly, so an unusual location is the
+    caller's business to declare via the environment variable.
+    """
+    if engine != "crw":
+        return None
+    env = os.environ.get(CRW_BIN_ENV)
+    if env and os.path.exists(env):
+        return env
+    found = shutil.which(engine)
+    if found:
+        return found
+    guess = os.path.expanduser(f"~/.local/bin/{engine}")
+    return guess if os.path.exists(guess) else None
+
+
+def run_fallback(url, engine, reason):
+    """Run the fallback engine. Returns (text_or_None, meta).
+
+    Never raises and never changes the exit status by itself: a missing binary is a
+    warning, because the caller already has a usable answer and a published script must
+    not depend on a third-party binary being installed.
+    """
+    meta = {"fallback_engine": engine, "fallback_reason": reason or "extraction_failed"}
+    binary = find_fallback_binary(engine)
+    if not binary:
+        meta["fallback_status"] = "not-installed"
+        meta["fallback_hint"] = (f"{engine} not found — set {CRW_BIN_ENV} or put it on PATH; "
+                                 "the extraction above stands unchanged")
+        err(f"warning: fallback engine '{engine}' not installed — skipping "
+            f"(set {CRW_BIN_ENV} or install it on PATH)")
+        return None, meta
+
+    cmd = [binary, "scrape", url, "--js", "--format", "json"]
+    started = time.time()
+    try:
+        res = run(cmd, timeout=FALLBACK_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        meta["fallback_status"] = "timeout"
+        err(f"warning: fallback '{engine}' timed out after {FALLBACK_TIMEOUT}s")
+        return None, meta
+    meta["fallback_ms"] = int((time.time() - started) * 1000)
+    if res.returncode != 0:
+        meta["fallback_status"] = "error"
+        err(f"warning: fallback '{engine}' exited {res.returncode} — ignoring its output")
+        return None, meta
+    try:
+        data = json.loads(res.stdout)
+    except (json.JSONDecodeError, TypeError):
+        meta["fallback_status"] = "unparsable"
+        return None, meta
+    text = (data.get("markdown") or "").strip()
+    if not text:
+        meta["fallback_status"] = "empty"
+        return None, meta
+    md = data.get("metadata") or {}
+    meta.update(fallback_status="used", fallback_method=f"{engine}-js",
+                rendered_with=md.get("renderedWith"), render_ms=md.get("elapsedMs"),
+                render_decision=data.get("renderDecision") or {})
+    return text, meta
 MIN_CREDIBLE_CHARS = 200          # below this an extraction is suspect
 MIN_CONTENT_URL_CHARS = 500       # what a real article should roughly exceed
 MAX_REGEX_BODY_CHARS = 100_000    # regex fallback hard cap
@@ -86,59 +195,15 @@ STOPWORDS = frozenset(
     "your you our from as that this may can not no".split()
 )
 
-JSONLD_EXTRACT_HELPER = textwrap.dedent(
-    """
-    import json, re, sys
-
-    html = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-    best = None
-
-    # 1. Direct articleBody in any JSON-LD block
-    for m in re.finditer(r'<script[^>]*type=["\\']application/ld\\+json["\\'][^>]*>(.*?)</script>', html, re.DOTALL):
-        try:
-            data = json.loads(m.group(1))
-        except json.JSONDecodeError:
-            continue
-        def walk(o):
-            global best
-            if isinstance(o, dict):
-                for k, v in o.items():
-                    if k == "articleBody" and isinstance(v, str):
-                        if best is None or len(v) > len(best):
-                            best = v
-                    walk(v)
-            elif isinstance(o, list):
-                for item in o:
-                    walk(item)
-        walk(data)
-    if best:
-        print(best)
-        sys.exit(0)
-
-    # 2. __NEXT_DATA__ fallback: search for long text under common keys
-    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
-    if m:
-        try:
-            data = json.loads(m.group(1))
-        except json.JSONDecodeError:
-            data = None
-        if data:
-            def walk2(o, path=""):
-                global best
-                if isinstance(o, dict):
-                    for k, v in o.items():
-                        if isinstance(v, str) and len(v) > 500 and k in ("articleBody", "body", "content", "text"):
-                            if best is None or len(v) > len(best):
-                                best = v
-                        walk2(v, path + "/" + k)
-                elif isinstance(o, list):
-                    for i, item in enumerate(o[:5]):
-                        walk2(item, path + f"[{i}]")
-            walk2(data)
-    if best:
-        print(best)
-    """
+# JSON-LD / __NEXT_DATA__ extraction lives in jsonld_extract.py beside this script.
+# It used to be an embedded 53-line string constant; it is a file now because it is
+# testable on its own (python3 jsonld_extract.py page.html) and it is the piece most
+# likely to need fixing. realpath matters: webx is normally invoked through a symlink
+# in ~/.local/bin, so __file__ alone would point at the wrong directory.
+JSONLD_HELPER_PATH = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "jsonld_extract.py"
 )
+
 
 REGEX_EXTRACT_HELPER = textwrap.dedent(
     """
@@ -255,18 +320,44 @@ def extract_trafilatura(html_path):
     return None
 
 
-def extract_jsonld(html_path):
-    """Run the JSON-LD / __NEXT_DATA__ scan. Returns text or None."""
-    helper = os.path.join(os.path.dirname(html_path), "extract_jsonld.py")
-    with open(helper, "w", encoding="utf-8") as f:
-        f.write(JSONLD_EXTRACT_HELPER)
+_JSONLD_CACHE = {}
+
+
+def jsonld_envelope(html_path):
+    """Parsed ld+json envelope for a downloaded page: {text, title, types, blocks,
+    truncated}. Cached per html_path, so reading the graph costs nothing when
+    extract_html has already run the helper to get the text candidate.
+    """
+    if html_path in _JSONLD_CACHE:
+        return _JSONLD_CACHE[html_path]
+    env = None
     try:
-        res = run([sys.executable, helper, html_path], timeout=60)
+        res = run([sys.executable, JSONLD_HELPER_PATH, html_path], timeout=60)
         if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
+            try:
+                parsed = json.loads(res.stdout)
+                if isinstance(parsed, dict):
+                    env = parsed
+            except json.JSONDecodeError:
+                # helper degraded to plain text; treat it as the old behaviour
+                env = {"text": res.stdout.strip(), "types": [], "blocks": [],
+                       "truncated": False}
     except subprocess.TimeoutExpired:
         err("json-ld scan timed out")
-    return None
+    _JSONLD_CACHE[html_path] = env
+    return env
+
+
+def extract_jsonld(html_path):
+    """Publisher-declared content: headline + articleBody, or None.
+
+    The helper returns the node's headline prepended to the body. Previously it
+    returned the body alone, so whenever this candidate won the page title was
+    silently dropped from the output.
+    """
+    env = jsonld_envelope(html_path)
+    text = (env or {}).get("text") or ""
+    return text.strip() or None
 
 
 def extract_regex(html_path):
@@ -295,20 +386,72 @@ def extract_pdf(pdf_path):
     return None
 
 
-def failure_hint(url, html_path):
-    """Give a targeted reason when extraction finds nothing credible."""
-    hint = "try the browser tool or web_search for a mirror"
+FAILURE_HINTS = {
+    "video": "video page — use the youtube-content skill / fetch_transcript.py for the transcript",
+    "block_captcha": "anti-bot captcha wall (reCAPTCHA/Cloudflare challenge) — no crawler-friendly path; try web_search for a mirror or the site's API",
+    "shell_csr": "JS-rendered page (Next.js CSR) — content is not in the static HTML; use the browser tool or find the content elsewhere (docs mirror, API, PDF)",
+    "shell_mount": "empty JS app shell (mount point present, almost no text) — the content is injected by script; needs a renderer",
+    "shell_spa": "JS app shell (framework markup, almost no text) — the content is injected by script; needs a renderer",
+    "unknown": "try the browser tool or web_search for a mirror",
+}
+
+REMEDIES = {"video": "transcript", "block_captcha": "mirror", "shell_csr": "render",
+            "shell_mount": "render", "shell_spa": "render", "unknown": "mirror"}
+
+
+def served_text_len(raw):
+    """Approximate text length of the served HTML (script/style removed)."""
+    t = re.sub(r"<(script|style|noscript)\b.*?</\1>", " ", raw, flags=re.S | re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return len(re.sub(r"\s+", " ", t).strip())
+
+
+def classify_failure(url, html_path):
+    """(code, remedy) for a page that failed, or that extracted suspiciously little.
+
+    The framework-name route is deliberately NOT the only signal: a Wix/NationBuilder
+    events page carries no `__NEXT_DATA__`, no mount id and no framework marker at all --
+    every browser-ish string in it belonged to the theme. What it does have is a served
+    body that is almost entirely navigation. So the structural check (served text that is
+    short AND fragment-like) is what catches that class.
+    """
     if any(h in url.lower() for h in ("youtube.com", "youtu.be", "youtube-nocookie.com")):
-        return "video page — use the youtube-content skill / fetch_transcript.py for the transcript"
+        return "video", REMEDIES["video"]
     try:
-        raw = open(html_path, encoding="utf-8", errors="replace").read(200_000).lower()
+        raw = open(html_path, encoding="utf-8", errors="replace").read(200_000)
     except OSError:
-        return hint
-    if "recaptcha" in raw or "challenge-platform" in raw or 'id="challenge"' in raw:
-        return "anti-bot captcha wall (reCAPTCHA/Cloudflare challenge) — no crawler-friendly path; try web_search for a mirror or the site's API"
-    if "__next_data__" in raw or 'id="__next"' in raw:
-        return "JS-rendered page (Next.js CSR) — content is not in the static HTML; use the browser tool or find the content elsewhere (docs mirror, API, PDF)"
-    return hint
+        return "unknown", REMEDIES["unknown"]
+    low = raw.lower()
+    if any(m in low for m in CAPTCHA_MARKERS):
+        return "block_captcha", REMEDIES["block_captcha"]
+    if "__next_data__" in low or 'id="__next"' in low:
+        return "shell_csr", REMEDIES["shell_csr"]
+    if served_text_len(raw) < SHELL_TEXT_MAX:
+        if MOUNT_RE.search(raw):
+            return "shell_mount", REMEDIES["shell_mount"]
+        if any(m in low for m in FRAMEWORK_MARKERS):
+            return "shell_spa", REMEDIES["shell_spa"]
+    return "unknown", REMEDIES["unknown"]
+
+
+def looks_content_free(text):
+    """True when a 'successful' extraction is fragments rather than prose.
+
+    Calibrated against two pages the bench separates cleanly: agntcy.org is
+    legitimately thin (1,180 chars, 9 sentences -- a real, short landing page) while
+    churchwellesleyvillage.ca/events returned 1,419 chars of pure menu with 0 sentences.
+    Short-ness alone cannot tell those apart; absence of prose can. It is advisory
+    (render_candidate), not an action, and a short factual page may trip it.
+    """
+    t = re.sub(r"\s+", " ", text or "").strip()
+    if not t or len(t) >= SHELL_TEXT_MAX:
+        return False
+    return len(re.findall(r"[.!?]\s+[A-Z0-9]", t)) + len(re.findall(r"[.!?]$", t)) < MIN_SENTENCES
+
+
+def failure_hint(url, html_path):
+    """Targeted, human-readable reason when extraction finds nothing credible."""
+    return FAILURE_HINTS[classify_failure(url, html_path)[0]]
 
 
 def has_challenge_markers(path):
@@ -423,7 +566,7 @@ def extract_html(html_path, url):
     return found[best_method], best_method
 
 
-def process_url(url, keep=False, force=False):
+def process_url(url, keep=False, force=False, fallback=""):
     if url.lower().endswith(".pdf") or "arxiv.org/pdf" in url.lower():
         return process_pdf(url, keep, force)
     ok, score, detail = safety_score(url, force=force)
@@ -445,10 +588,50 @@ def process_url(url, keep=False, force=False):
         err(f"downloaded {size} bytes (HTTP {status or '?'})")
 
         text, method = extract_html(html_path, url)
+        code, remedy = classify_failure(url, html_path)
+        suspect = None
         if text is None:
+            suspect = code
+            FAILURE_BY_URL[url] = {"failure_code": code, "failure_remedy": remedy,
+                                   "render_candidate": remedy == "render"}
             err(f"no credible extraction for {url} — {failure_hint(url, html_path)}")
+        else:
+            err(f"extracted {len(text)} chars via {method}")
+            env = jsonld_envelope(html_path)
+            if env and (env.get("types") or env.get("blocks")):
+                STRUCTURED_BY_URL[url] = {
+                    "structured_types": env.get("types") or [],
+                    "structured_data": env.get("blocks") or [],
+                    "structured_truncated": bool(env.get("truncated")),
+                }
+            # A successful extraction can still be content-free (nav-only shell). Flag it
+            # rather than reporting success and letting the caller discover it downstream.
+            if remedy == "render":
+                suspect = code
+                FAILURE_BY_URL[url] = {"failure_code": code, "failure_remedy": remedy,
+                                       "render_candidate": True}
+            elif looks_content_free(text):
+                suspect = "prose_free"
+                FAILURE_BY_URL[url] = {"extraction_suspect": "prose_free",
+                                       "failure_remedy": "render", "render_candidate": True}
+
+        # Opt-in second engine, only when the extraction was unusable or shell-like.
+        # tirith already ran above, so the fallback inherits the safety gate rather than
+        # bypassing it -- the reason to put it here and not in a caller's script.
+        if fallback and (text is None or suspect is not None):
+            rendered, meta = run_fallback(url, fallback, suspect)
+            FALLBACK_BY_URL[url] = meta
+            if rendered:
+                if text is None:
+                    text, method = rendered, meta.get("fallback_method", fallback)
+                    err(f"fallback '{fallback}' recovered {len(rendered)} chars — using it "
+                        f"(nothing else was usable)")
+                else:
+                    FALLBACK_BY_URL[url]["content_rendered"] = rendered
+                    err(f"fallback '{fallback}' also produced {len(rendered)} chars — "
+                        f"attached as content_rendered, original kept")
+        if text is None:
             return 1
-        err(f"extracted {len(text)} chars via {method}")
         return (text, method, score)
     finally:
         if not keep:
@@ -547,6 +730,10 @@ def main():
     ap.add_argument("--json", action="store_true", help="structured JSON output")
     ap.add_argument("--keep", action="store_true", help="keep downloaded HTML in /tmp")
     ap.add_argument("--force", action="store_true", help="proceed past tirith refusal")
+    ap.add_argument("--fallback-engine", default="", choices=["", "crw"],
+                    help="opt-in second engine for pages whose content is not in the served "
+                         "HTML (runs only when extraction was unusable or shell-like; a "
+                         "missing binary warns and is skipped, never fails the run)")
     ap.add_argument("--selftest", action="store_true", help="run the regression suite in webx-tests.tsv")
     args = ap.parse_args()
 
@@ -564,13 +751,19 @@ def main():
     results = []
     any_failed = False
     for url in urls:
-        outcome = process_url(url, keep=args.keep, force=args.force)
+        outcome = process_url(url, keep=args.keep, force=args.force,
+                              fallback=args.fallback_engine)
         if isinstance(outcome, tuple):
             text, method, score = outcome
-            results.append({"url": url, "method": method, "chars": len(text), "safety": score, "content": text})
+            rec = {"url": url, "method": method, "chars": len(text), "safety": score, "content": text}
+            rec.update(STRUCTURED_BY_URL.get(url, {}))
+            rec.update(FAILURE_BY_URL.get(url, {}))
+            rec.update(FALLBACK_BY_URL.get(url, {}))
+            results.append(rec)
         else:
             any_failed = True
-            results.append({"url": url, "error": True})
+            results.append({"url": url, "error": True, **FAILURE_BY_URL.get(url, {}),
+                            **FALLBACK_BY_URL.get(url, {})})
 
     if args.json:
         print(json.dumps(results, ensure_ascii=False))

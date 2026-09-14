@@ -1,0 +1,599 @@
+{
+  "version": 1,
+  "updated": "2026-09-13",
+  "about": [
+    "Extraction bench — cross-engine comparison on real pages.",
+    "",
+    "Scoring is FACT RECALL, not byte count: byte counts reward nav chrome and punish",
+    "clean extraction (that is how 'this tool returns 1.7x more' became a misleading",
+    "headline in the fastCRW evaluation). Each case may declare must_contain facts,",
+    "each of which is a distinctive content string that should survive extraction.",
+    "",
+    "expect semantics:",
+    "  ok            must extract real content (offline/HTTP-only is expected to suffice)",
+    "  needs_render  content exists only after JS execution; a non-rendering engine is",
+    "                not penalised for missing it, a rendering engine is scored on facts",
+    "  fail          must fail loudly and cleanly (no styled-404 garbage, no consent page)",
+    "  policy        the assertion is about behaving correctly, e.g. honouring robots.txt",
+    "",
+    "facts_source records where the golden strings came from, because a fixture whose",
+    "truth was read off a rendering engine cannot be used to prove that engine right:",
+    "  raw-html      served HTML (ground truth for non-JS pages)",
+    "  raw-html+jsonld  served HTML, incl. content that only exists inside ld+json",
+    "  rendered      a rendered view (weaker truth; flagged per case)",
+    "  none          no facts yet",
+    "",
+    "Run --validate to check every declared fact against the ground-truth HTML; any",
+    "fact the fixture gets wrong is reported as a FIXTURE ERROR rather than silently",
+    "distorting an engine comparison."
+  ],
+  "cases": [
+    {
+      "id": "w-static-article",
+      "group": "web",
+      "axis": "baseline prose article",
+      "url": "https://en.wikipedia.org/wiki/Neo-Luddism",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "The plain case every engine should win. Probed: plain curl 200, ld+json x1.",
+      "must_contain": [
+        "Neo-Luddism or new Luddism is a philosophy opposing",
+        "Luddite"
+      ],
+      "must_not_contain": [
+        "accept all cookies",
+        "enable javascript"
+      ]
+    },
+    {
+      "id": "w-long-article",
+      "group": "web",
+      "axis": "very long page / size limits",
+      "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "2.27 MB HTML, 310k chars of text — tests truncation caps and memory.",
+      "must_contain": [
+        "Artificial intelligence",
+        "Turing test"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-substack",
+      "group": "web",
+      "axis": "newsletter platform",
+      "url": "https://www.interconnects.ai/p/6-months-to-live-for-open-models",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Substack — a known extraction-fragile platform for us.",
+      "must_contain": [
+        "6 months to live for open models",
+        "The most serious test to date of open source AI"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-wordpress-news",
+      "group": "web",
+      "axis": "WordPress news article",
+      "url": "https://neurosciencenews.com/social-cooperation-evolution-psychology-31087/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "WordPress, where trafilatura sometimes grabs the wrong content block.",
+      "must_contain": [
+        "Rethinking the Prisoner",
+        "How Cooperation Wins"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-corporate-blog",
+      "group": "web",
+      "axis": "corporate blog (previous trafilatura 0-byte case)",
+      "url": "https://blogs.nvidia.com/blog/japan-ecosystem-2026/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Documented 0-byte trafilatura case on this box; regex fallback was needed.",
+      "must_contain": [
+        "NVIDIA and Japan Bring Full-Stack AI and Robotics to Every Industry",
+        "NVIDIA and its partners in Japan are this week showcasing"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-code-docs",
+      "group": "web",
+      "axis": "technical docs, code blocks",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Code-block fidelity matters for research reading; prose-only extractors mangle it.",
+      "must_contain": [
+        "Ownership is a set of rules that govern how a Rust program manages memory"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-mdn-code-tables",
+      "group": "web",
+      "axis": "docs with code + tables",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Mixed code + tabular reference content.",
+      "must_contain": [
+        "Array.prototype.map()",
+        "The map() method of Array instances creates a new array"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-table-heavy",
+      "group": "web",
+      "axis": "data tables",
+      "url": "https://en.wikipedia.org/wiki/List_of_countries_by_population_(United_Nations)",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "772 KB of mostly tabular data — tests markdown table conversion.",
+      "must_contain": [
+        "List of countries and dependencies by population",
+        "World Population Prospects"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-paywall-jsonld",
+      "group": "web",
+      "axis": "paywall with articleBody in JSON-LD",
+      "url": "https://hbr.org/2026/07/3-questions-to-pressure-test-your-priorities",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "HBR: trafilatura sees only the summary, the full body is in ld+json. Also __NEXT_DATA__ (probed: next-data + ld+json x1). The case that proves whether an engine reads structured data.",
+      "must_contain": [
+        "Earlier this year, I was in a workshop with 10 leaders",
+        "3 Questions to Pressure-Test Your Priorities"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-huge-html",
+      "group": "web",
+      "axis": "very large single page (paper)",
+      "url": "https://transformer-circuits.pub/2026/workspace/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "322k chars of text in one document; regex paths hit their caps here.",
+      "must_contain": [
+        "If the mind is an ocean, we spend our lives floating at the surface",
+        "Verbalizable Representations Form a Global Workspace"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-spa-shell",
+      "group": "web",
+      "axis": "JS shell — content absent from served HTML",
+      "url": "https://kyutai.org/blog/2026-01-13-pocket-tts/",
+      "expect": "needs_render",
+      "facts_source": "rendered",
+      "why": "Served HTML is 9.7 KB with 498 chars of text and no article (confirmed by probe). Existing webx suite expects graceful failure here. Tests whether crw's renderer actually unlocks it.",
+      "must_contain": [],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-vendor-blocked-403",
+      "group": "web",
+      "axis": "bot-protected: 403 to plain client",
+      "url": "https://www.ago.ca/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Probed: plain curl 403/5.3 KB, impersonated 200/130 KB. Real Togather Tier-2 source. crw needed its chrome rung here (renderDecision reason=vendorBlock).",
+      "must_contain": [
+        "Acclaimed filmmaker Diego Marcon makes his Canadian debut",
+        "Melissa Auf der Maur"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-vendor-blocked-401",
+      "group": "web",
+      "axis": "bot-protected: 401 to plain client",
+      "url": "https://www.reuters.com/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Probed: plain curl 401, impersonated 200 with ld+json x2. A different block signature than 403 — checks the impersonation fallback triggers on 401 too.",
+      "must_contain": [
+        "Find latest news from every corner of the globe at Reuters.com",
+        "Brent crude futures"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-pdf",
+      "group": "web",
+      "axis": "PDF document",
+      "url": "https://arxiv.org/pdf/2605.12357",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "1 MB PDF. Only webx has a documented pdftotext path; crw has native PDF parsing (attempt_scanned flag), webclaw parses documents too.",
+      "must_contain": [],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-non-english",
+      "group": "web",
+      "axis": "non-English content",
+      "url": "https://es.wikipedia.org/wiki/Inteligencia_artificial",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Language handling — bad boilerplate stripping often shows up first here.",
+      "must_contain": [
+        "Inteligencia artificial",
+        "aprendizaje autom"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-thin-landing",
+      "group": "web",
+      "axis": "intentionally thin landing page",
+      "url": "https://agntcy.org/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Only ~1.6 KB of real text. Tests the opposite failure mode: a thin page must NOT be mistaken for an extraction failure, and an engine must not pad it with chrome.",
+      "must_contain": [
+        "Building the Internet of Agents (IoA)",
+        "Federated registry for cross-framework"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-github-readme",
+      "group": "web",
+      "axis": "code host page",
+      "url": "https://github.com/kyutai-labs/unmute",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "397 KB HTML, 16 KB text. README extraction through a heavy app shell.",
+      "must_contain": [
+        "Unmute is a system that allows text LLMs to listen and speak"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-false-success-404",
+      "group": "web",
+      "axis": "must fail cleanly: HTTP 404 styled page",
+      "url": "https://hbr.org/this-page-does-not-exist-xyz",
+      "expect": "fail",
+      "facts_source": "none",
+      "why": "HBR returns a 404 that renders as a page. Extracting it is a silent data-corruption bug; Probed: curl 404, curl-cffi exits non-zero.",
+      "must_contain": [],
+      "must_not_contain": [
+        "go back",
+        "sign in"
+      ]
+    },
+    {
+      "id": "t-jsonld-event-13",
+      "group": "togather",
+      "axis": "Tier 0 ideal: many Event JSON-LD blocks",
+      "url": "https://danceontario.ca/community/calendar/",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "Probed: 13 ld+json blocks WITH schema.org Event. The event-source happy path (Tier-0) — if an engine misses event names here, structured-data reading is the gap.",
+      "must_contain": [
+        "Ballet Espressivo Late Spring 2024",
+        "Events Archive - Dance Ontario"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-jsonld-event-blues",
+      "group": "togather",
+      "axis": "Tier 0: Event JSON-LD (single block)",
+      "url": "https://torontobluessociety.com/events/",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "Probed: Event schema present. A live Tier-0 event source.",
+      "must_contain": [
+        "Sunday Night Blues Jam",
+        "The Sunday Junction Jam"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-jsonld-event-jazz",
+      "group": "togather",
+      "axis": "Tier 0: Event JSON-LD on a calendar page",
+      "url": "https://jazzbistro.ca/event-calendar/",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "Probed: Event schema present. Calendar-style layout rather than a list.",
+      "must_contain": [
+        "Soul Jazz: An Evening with Donnybrook",
+        "Alyssa Giammaria"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-ssr-shell-luma",
+      "group": "togather",
+      "axis": "SSR shell: thin served text + __NEXT_DATA__",
+      "url": "https://luma.com/1rg-calendar",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "Probed: next-data + ld+json x2 + Event schema, but only 1,232 chars of served text. The content is in the JSON payload, not the DOM. A JSON-LD/next-data reader gets it; a text extractor cannot.",
+      "must_contain": [
+        "Civic Space Sunday",
+        "Upcoming Events on 1RG Public Calendar"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-consent-banner",
+      "group": "togather",
+      "axis": "consent/cookie banner on a Tier-0 source",
+      "url": "https://torontorailwaymuseum.com/events/list/",
+      "expect": "ok",
+      "facts_source": "raw-html+jsonld",
+      "why": "Probed: consent wording present in visible text + ld+json x2. Tests the consent-page trap: an extractor must return events, not the banner.",
+      "must_contain": [
+        "Events Archive - Toronto Railway Museum",
+        "Toronto Railway Museum"
+      ],
+      "must_not_contain": [
+        "accept all cookies"
+      ]
+    },
+    {
+      "id": "t-spa-never-renders",
+      "group": "togather",
+      "axis": "T2 React SPA that never renders (disabled source)",
+      "url": "https://www.anotherstory.ca/events/",
+      "expect": "needs_render",
+      "facts_source": "rendered",
+      "why": "Observed on the source: a headless browser never resolves the event list; the page spins on an Ant Design loading state. Tests whether a different renderer (crw/lightpanda-or-chrome) does what the original bespoke scraper could not.",
+      "must_contain": [],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-wix-widget",
+      "group": "togather",
+      "axis": "third-party widget never renders (Wix OOI, disabled source)",
+      "url": "https://www.churchwellesleyvillage.ca/events",
+      "expect": "needs_render",
+      "facts_source": "rendered",
+      "why": "Observed on the source: the Wix OOI widget never renders within a scraper's render timeout. Same class as another-story: does a different renderer change the answer?",
+      "must_contain": [],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-freeform-layout",
+      "group": "togather",
+      "axis": "freeform layout, no repeating container (disabled source)",
+      "url": "https://orpheuschoirtoronto.com/2025-2026-concert-season/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: concerts are loose h2/hr siblings with no wrapping div, so CSS 'event_list' grouping fails. A prose extractor should still surface the concert names+dates even though a selector scraper cannot — the clearest case where general extraction beats a bespoke selector config.",
+      "must_contain": [
+        "Runnymede United Church",
+        "Orpheus closes out the season alongside guest artists",
+        "Saturday May 02, 2026"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-narrative-dates",
+      "group": "togather",
+      "axis": "dates only in narrative prose (disabled source)",
+      "url": "https://www.reelasian.com/year-round/current-events/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: dates appear as prose ('On Sunday, March 15, 2026, Reel Asian will host...'), unparseable by selector-based scraping.",
+      "must_contain": [
+        "Current Events - Reel Asian",
+        "Upcoming Events"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-detail-dates",
+      "group": "togather",
+      "axis": "dates only on detail pages (disabled source)",
+      "url": "https://tafelmusik.org/concerts-events/2025-26-season/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: listing shows names/venues, dates live on /event/ detail pages. Tests what the listing alone yields.",
+      "must_contain": [
+        "Discover a season filled with musical storytelling",
+        "2025/26 Season - Tafelmusik"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-attr-urls",
+      "group": "togather",
+      "axis": "event URLs hidden in data-* attributes (disabled source)",
+      "url": "https://www.xtsc.ca/zuluru/events/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: names available in data-event, URLs HTML-encoded inside data attributes.",
+      "must_contain": [
+        "Extreme Toronto Sports Club",
+        "Co-Ed Recreational Sports for Fun People"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-cloudflare-challenge",
+      "group": "togather",
+      "axis": "Cloudflare managed challenge (disabled source)",
+      "url": "https://www.uc.utoronto.ca/about-connect-us-events",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: plain curl gets 200/92KB but the scraper UA is challenged. A 200-sized block page is the worst failure mode — the false-success trap.",
+      "must_contain": [
+        "Contact our events team and learn more about booking event spaces at UC"
+      ],
+      "must_not_contain": [
+        "just a moment",
+        "checking your browser",
+        "enable javascript"
+      ]
+    },
+    {
+      "id": "t-cloudflare-403",
+      "group": "togather",
+      "axis": "Cloudflare 403 wall (disabled source)",
+      "url": "https://fringetoronto.com/fringe/shows",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: Cloudflare 403 on the only listing; needs a headless/undetected pass.",
+      "must_contain": [],
+      "must_not_contain": [
+        "just a moment",
+        "verifying you are human"
+      ]
+    },
+    {
+      "id": "t-robots-disallow",
+      "group": "togather",
+      "axis": "policy: robots.txt Disallow /* (disabled source)",
+      "url": "https://www.gladdaybookshop.com/events",
+      "expect": "policy",
+      "facts_source": "none",
+      "why": "Observed on the source: robots.txt disallows all agents. A civic-infrastructure project should record which engines honour robots.txt and which ignore it — the assertion is compliance, not extraction quality.",
+      "must_contain": [],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-date-blob",
+      "group": "togather",
+      "axis": "two dates concatenated by an icon element (disabled source)",
+      "url": "https://iictoronto.esteri.it/en/gli_eventi/calendario/",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: the date span renders as 'Thu Aug 06 2026Wed Aug 19 2026' because an svg icon sits between them and contributes no text.",
+      "must_contain": [
+        "Upcoming events"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "t-content-mismatch",
+      "group": "togather",
+      "axis": "content model mismatch: news, not events (disabled source)",
+      "url": "https://moca.ca/events",
+      "expect": "ok",
+      "facts_source": "none",
+      "why": "Observed on the source: the page is 'What's New' news posts, not dated events. Included as a negative control — an engine that 'successfully' extracts a large amount of text here is not producing events.",
+      "must_contain": [
+        "MOCA is Temporarily Closed for Installation"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "w-spa-shell-rendered",
+      "group": "web",
+      "axis": "JS shell + capability flag: content absent from served HTML",
+      "url": "https://kyutai.org/blog/2026-01-13-pocket-tts/",
+      "expect": "ok",
+      "facts_source": "rendered",
+      "engine_args": {
+        "crw": [
+          "--js"
+        ]
+      },
+      "why": "Served HTML is 9.7 KB with 498 chars of text and no article. crw's default mode returns 77 chars; with --js its Lightpanda rung returns the full post. webx has no renderer at all, so this is the class where a render tier would be additive.",
+      "must_contain": [
+        "Pocket TTS: a high-quality TTS with voice cloning that runs on CPU",
+        "We present Pocket TTS"
+      ],
+      "must_not_contain": [],
+      "ground_truth": "https_kyutai_org_blog_2026_01_13_pocket_tts_.rendered.txt"
+    },
+    {
+      "id": "t-spa-never-renders-rendered",
+      "group": "togather",
+      "axis": "Togather 'SPA never renders' + capability flag",
+      "url": "https://www.anotherstory.ca/events/",
+      "expect": "ok",
+      "facts_source": "rendered",
+      "engine_args": {
+        "crw": [
+          "--js"
+        ]
+      },
+      "why": "Observed on the source: a headless browser never resolves the event list; the page spins on an Ant Design loading state. Default mode: 66 chars. With --js: real listings with titles, authors and Eventbrite links.",
+      "must_contain": [
+        "Amanda Sung",
+        "Neither Here Nor There"
+      ],
+      "must_not_contain": [],
+      "ground_truth": "https_www_anotherstory_ca_events_.rendered.txt"
+    },
+    {
+      "id": "t-wix-widget-rendered",
+      "group": "togather",
+      "axis": "Togather: Wix OOI never renders within the scraper's render timeout + capability flag",
+      "url": "https://www.churchwellesleyvillage.ca/events",
+      "expect": "ok",
+      "facts_source": "rendered",
+      "engine_args": {
+        "crw": [
+          "--js"
+        ]
+      },
+      "why": "Observed on the source: the Wix OOI widget never renders within the scraper's render timeout. Default mode: 1,419 chars of nav. With --js: the rendered calendar grid appears.",
+      "must_contain": [
+        "October 2026"
+      ],
+      "must_not_contain": [],
+      "ground_truth": "https_www_churchwellesleyvillage_ca_events.rendered.txt"
+    },
+    {
+      "id": "t-ssr-payload-rendered",
+      "group": "togather",
+      "axis": "negative control: rendering does NOT help when data is in a JSON payload",
+      "url": "https://luma.com/1rg-calendar",
+      "expect": "ok",
+      "facts_source": "rendered",
+      "engine_args": {
+        "crw": [
+          "--js"
+        ]
+      },
+      "why": "Included as a counter-case. crw --js almost doubles the text here (1,120 -> 1,914 chars) and takes 20 s, but the events are in the __NEXT_DATA__ payload rather than the DOM, so no events appear. Rendering is not a universal fix; reading the payload is a different fix.",
+      "must_contain": [],
+      "must_not_contain": [],
+      "ground_truth": "https_luma_com_1rg_calendar.rendered.txt"
+    },
+    {
+      "id": "t-spa-never-renders-fallback",
+      "group": "togather",
+      "axis": "webx's own opt-in fallback, end to end",
+      "url": "https://www.anotherstory.ca/events/",
+      "expect": "ok",
+      "facts_source": "rendered",
+      "engine_args": {
+        "webx": [
+          "--fallback-engine=crw"
+        ],
+        "crw": [
+          "--js"
+        ]
+      },
+      "why": "Same page as t-spa-never-renders-rendered but a different question: webx alone fails here (63 chars), and this case asserts it reaches the facts when given --fallback-engine=crw. Ground truth is the same captured render, so the fixture cannot pretend webx solved it without the flag.",
+      "must_contain": [
+        "Amanda Sung",
+        "Neither Here Nor There"
+      ],
+      "must_not_contain": [],
+      "ground_truth": "https_www_anotherstory_ca_events_.rendered.txt"
+    }
+  ],
+  "facts_filled": "2026-09-13",
+  "js_variants_added": "2026-09-13"
+}
