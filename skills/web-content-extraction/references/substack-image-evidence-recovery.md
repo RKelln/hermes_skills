@@ -1,4 +1,4 @@
-# Recovering image-borne evidence from Substack / CMS posts
+# Recovering image-borne evidence (Substack screenshots, CMS posts, hosted-report figures)
 
 ## The failure mode (verified 2026-09-11)
 
@@ -96,6 +96,43 @@ call `vision_analyze(region=[x1,y1,x2,y2])` on the original image instead.
 visible model name/version labels and dates, and — separately — whether the excerpt
 looks like an unprompted statement or a reply to a leading question. That last
 question is usually the whole point of reading the images.
+
+## Variant: a hosted report's figure carries the section's own content
+
+Verified 2026-09-14 on a lab threat-intelligence report (250,591 chars of clean prose
+via webx, so the extract looked complete). Two independent gaps turned up:
+
+1. **A section whose body is a figure.** The section's entire payload was "The
+   following is a list of skills developed by threat actors…" and then nothing — the
+   list is a 1920×1778 JPEG. The tell is the same one as a heading with nothing under
+   it, one step further out: **a lead-in sentence promising a list, table or graphic,
+   with no content after it.**
+2. **A text chart that is a JPEG, not a data payload.** 52 figures in the report, all
+   served as CDN images; only one carries numbers (a ranked bar chart). Text extraction
+   can therefore lose the report's only quantified figure while returning 250k chars.
+
+Inventory before reading anything: the page's embedded content JSON holds every figure
+caption and image URL in document order, so one regex pass tells you the whole figure
+set (and the caption tells you which ones are data). Then fetch each CDN URL straight
+into `vision_analyze` — for hosted figures there is no need for the PIL contact-sheet
+step above, which exists only for local screenshot batches.
+
+Ask for a verbatim transcription of every label, value and legend. Then treat the
+result as **the agent's reading of pixels**: mark transcribed numbers `~` rather than
+✓ unless a text source corroborates them, and say in the note that the figure was
+recovered by vision. A data-bearing caption whose text never appears in the extract is
+also a hint that the publisher's own figure list is the better index of what the
+report contains than the prose alone.
+
+**Never skip a figure because the vision provider looks unavailable.** Reading pixels
+is now a first-line capability rather than a luxury: the configured auxiliary vision
+model handles this (an image-only review of a figure is cheap), and a local vision
+model is the fallback — Ryan confirmed one is available as of 2026-09-14. If a vision
+call fails, that is a provider problem to fix or route around, not a reason to write
+"the section appears to be empty". Note also that a truncated URL is the most common
+cause of a failed image fetch (`...slice(0,30)` style prints), so print URLs in full
+before fetching them.
+
 
 ## Reporting discipline
 

@@ -117,6 +117,9 @@ uvx --from trafilatura python3 -c "import trafilatura; print(trafilatura.extract
 
 **⚠️ Always validate trafilatura output.** Trafilatura can return non-zero, semantically wrong content — e.g., returning a js-cookie README or related-post sidebar instead of the article body. Wrong-content failures produce output that looks plausible (thousands of chars, non-empty) but is useless. This is distinct from the 0-bytes or <200-chars failure. After extraction, quickly check: does the first few lines look like the expected article (title, abstract, headline)? If it's cookie consent text, npm library docs, "related posts," or marginalia, fall through to the targeted extraction method below. Do not rely on char count as a validity signal.
 
+- **An extract that ends at a heading, or right after a lead-in sentence, has not read that section.** Figures, screenshot appendices and rendered tables hold content trafilatura never sees, and the failure is silent: the extract shows the section heading (or "the following is a list of…", "the graphic below illustrates…") with nothing under it. The content is not missing from the page — it is inside an image. Before writing any sentence about what such a section says, enumerate the page's images and read them with `vision_analyze`: pull **every** caption + CDN URL out of the downloaded HTML's embedded JSON (`\"caption\":[{…\"text\":\"…` and `\"url\":\"https://cdn.…`), which gives the full figure inventory up front instead of the one figure you happened to notice. Recipe: `references/substack-image-evidence-recovery.md` (applies to any hosted report, not just Substack).
+- **Never print a URL truncated when a later call will fetch it.** `url.split('/')[-1][:30]` produces a filename fragment that looks like a valid slug; reconstructing from it 400s and reads like a broken tool rather than a bad URL. Print full URLs (or write them to a file) whenever the next step is `vision_analyze`, `curl` or `web_extract` on them.
+
 ### Pipeline B: Browser Tool (JS-heavy pages)
 
 For SPAs, dynamically-loaded content, and pages where curl fails. Slower but handles anything.
@@ -209,7 +212,7 @@ skill_view(name='web-content-extraction', file_path='references/extraction-metho
 
 Load with `skill_view(name='research/web-content-extraction', file_path='<path>')`. The body above links the most-used ones; this is the full set so nothing is orphaned.
 
-- `references/substack-image-evidence-recovery.md` — Recovering image-borne evidence from Substack / CMS posts.
+- `references/substack-image-evidence-recovery.md` — Recovering image-borne evidence: Substack/CMS screenshot appendices and hosted-report figures (image inventory from embedded JSON, then vision).
 - `references/github-repo-research.md` — GitHub Repo Deep Recon (structure, images, deployment).
 - `references/long-form-web-paper-reading.md` — Reading Long-Form Web-Native Research Papers (Transformer Circuits style).
 - `references/form-schema-extraction.md` — Form Schema Extraction — Tally.so and similar client-rendered forms.
