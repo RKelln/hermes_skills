@@ -484,6 +484,16 @@ If your skill's workflow includes independent operations (checking multiple venu
   (e.g., "Typst 0.15.0 is installed at /path/to/typst"). A reviewer who can
   only read the SKILL.md can catch PII and tone issues but not broken commands.
   Give them `toolsets=["terminal","file"]` so they can actually run commands.
+- **`skill_manage` batches are atomic — a failed op reverts the successful ones**:
+  When the operations array has several patches, a single unmatched `old_string`
+  fails the whole call and rolls back every op before it. The partial-state
+  preview in the error message shows the applied changes, so the file *looks*
+  fixed while the disk still holds the original. Two consequences: (1) keep
+  batched patches on non-overlapping regions — never let one edit the text
+  another matches against; (2) after any batch that reports a failure, re-read
+  the file before assuming the earlier ops landed. A single-op call per distinct
+  edit is slower but cannot revert itself.
+- **A skill copied onto someone else's machine stops being updatable — version the copy and keep the volatile words out of it**: the sharpest field example is a CLI that ships an instruction file for coding agents to save into their own skills folders. It names exactly one command and carries a version number, because "a copy of this text saved in October is still sitting in somebody's skills folder in March," and every use triggers a version check against the full instructions that ship inside the program. Two rules follow for any skill or handout a user's agent will install: (1) stamp the copy with a version so a stale one announces itself, and leave anything that moves — command names, option names, plan numbers — out of the copied body; the copy points at the artifact, or checks against it, because the artifact is the only version that is true; (2) expect the hand-off itself to damage the file — an agent told to save "exactly this text" stripped the frontmatter header off, which is exactly what makes a skill unloadable by its host tool, so say which lines must survive and verify the landed copy rather than trusting the agent's report.
 
 ## Verification
 
