@@ -2,11 +2,41 @@
 
 **Problem**: Primary source (NYT, WSJ, Bloomberg, etc.) is fully blocked by DataDome/Cloudflare/paywall. Browser returns captcha. Curl returns captcha. Google cache returns captcha. Jina.ai returns "SecurityCompromiseError".
 
-**Approach**: Don't keep hammering the primary source. Reconstruct key facts from secondary coverage, organizational press pages, and reporter social posts.
+**Approach**: Don't keep hammering the primary source. Try the archive route first (below) — it yields the *full* article, not a reconstruction — then fall back to triangulation from secondary coverage.
+
+## Step 0 (do this first): archive.today snapshots — same-day, and full text
+
+**archive.today (`archive.is` / `archive.ph`) takes snapshots within hours of publication and serves the complete article body**, which beats every triangulation below. Verified 2026-09-17 on a NYT technology story published the previous evening: direct fetches were 403 to `curl-cffi --impersonate chrome`, to a Googlebot UA, and to the local `webx` CLI; a real Chrome session opened the URL but returned a paywall shell with an empty `document.body.innerText`; the archive.today snapshot returned the full text (headline, subhead, byline, every paragraph).
+
+Finding the snapshot (the searchable index is the reliable part — the `newest` redirect is not):
+
+```bash
+# 1. Search for the snapshot id — archive.today URLs show up in ordinary web results
+web_search(query='"<exact article headline>" archive.is OR archive.today <outlet> <year>')
+#    → e.g. https://archive.is/8j2Hc  (captured 2026-09-17T01:48:41Z, ~9h after publication)
+
+# 2. Download the snapshot, then extract exactly as usual
+target="${TMPDIR:-/tmp}/paywall-triangulation"; mkdir -p "$target"
+uvx curl-cffi get "https://archive.is/8j2Hc" --impersonate chrome --body > "$target/page.html"
+wc -c "$target/page.html"     # a real snapshot is MB-scale; ~5KB is a captcha or rate-limit page
+uvx --from trafilatura python3 -c "import trafilatura; print(trafilatura.extract(open('$target/page.html', encoding='utf-8', errors='replace').read(), output_format='markdown') or '')"
+
+# Fallback for the id: the newest-snapshot redirect, which can 429/502 (it did on this pass)
+uvx curl-cffi get "https://archive.is/newest/<ARTICLE-URL>" --impersonate chrome --body > "$target/page.html"
+```
+
+**Then cross-check the wording against a same-day syndication.** Outlets republish NYT/WSJ wire copy within hours with identical text (the Philadelphia Inquirer carried this story the next morning), so a second source confirms you have the publisher's wording and not a snapshot artefact:
+
+```bash
+uvx curl-cffi get "<syndicated-copy URL>" --impersonate chrome --body > "$target/syndicated.html"
+# extract both, compare the headline and first paragraphs, record the match in the note
+```
+
+Extraction also pulls in the page's own related-links module ("Explore Our Coverage of…") trailing the article — trim it from the raw file and record the route in frontmatter (`retrieved_via:` the snapshot URL plus the syndicated copy).
 
 ## Multi-source triangulation workflow
 
-When the primary URL is blocked:
+When the primary URL is blocked **and** no snapshot exists:
 
 ### 1. Check aggregator summaries
 
@@ -112,7 +142,9 @@ This was the pattern for the HFF KB update — the NYT article was a data point,
 ## Pitfalls
 
 - **Do not cycle on the blocked primary source.** Three failed attempts is enough. Each attempt costs a turn and adds nothing. After attempt 3, switch to the triangulation workflow.
-- **The Wayback Machine won't have today's article.** Recent-breaking stories get cached within 24-48 hours at best. Don't waste the call.
+- **The Wayback Machine won't have today's article — archive.today will.** Recent-breaking stories get cached within 24-48 hours at best on Wayback; archive.today carried a same-evening NYT piece and returned the full text. Step 0 first, Wayback rarely.
+- **A live browser session is not a paywall bypass.** Reaching nytimes.com in a real Chrome session succeeds at the navigation layer and still yields a paywall shell with an empty body — don't read "the page loaded" as "the article is readable". A snapshot or a syndicated copy is the way to the text.
+- **A snapshot is a claim about the article, so verify it against a syndicated copy.** Same-day republication is the cheap check; without it you cannot distinguish the publisher's wording from a capture artefact (and search snippets routinely mangle quotes and drop trailing punctuation — a snippet dropped the closing quote mark on this article's headline).
 - **Syndicated versions often have the same paywall.** Check for free preview (lede paragraph visible before the gate) but assume it's behind the same wall.
 - **Republishing sites only have 100 words.** Sites like `theengineeringofconsciousexperience.com` auto-pull the first paragraph from RSS. Don't deep-inspect them.
 - **Jina.ai blocks domains with previous abuse.** If NYT blocked Jina.ai for DDoS, it will keep blocking. No point retrying with different URL formats.
