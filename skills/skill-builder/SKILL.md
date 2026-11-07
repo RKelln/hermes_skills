@@ -349,8 +349,13 @@ creating a fresh repo per skill.
     └── <doc>.md
 ```
 
-Keep it minimal. Every file adds context cost. A great skill is a single
-SKILL.md with no scripts and no references.
+Keep it minimal, but minimal is not the same as one file. Each part has a job, and earns its place a different way:
+
+- **SKILL.md** — read every time the skill loads. Decisions, sequence, triggers.
+- **scripts/** — work that must happen the same way every time. Deterministic steps belong in code: cheaper than tokens, faster than a model, and it cannot be talked out of the result.
+- **references/** — detail needed on some runs and not others. Loaded on demand, so the runs that skip it pay nothing.
+
+The test is not the file count. It is which of those three a piece of content is. A skill with three files that each do one of those jobs is smaller in practice than a single SKILL.md carrying everything.
 
 ## What NOT to Include
 
